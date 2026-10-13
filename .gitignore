@@ -1,0 +1,4 @@
+**/obj/
+**/.mrs/
+**/.vscode/
+*.docx
