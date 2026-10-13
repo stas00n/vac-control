@@ -30,5 +30,21 @@
         <arguments>1.0-name-matches-false-false-*.wvproj</arguments>
       </matcher>
     </filter>
+    <filter>
+      <name/>
+      <type>6</type>
+      <matcher>
+        <id>org.eclipse.ui.ide.multiFilter</id>
+        <arguments>1.0-name-matches-false-false-ТЕХНИЧЕСКОЕ ЗАДАНИЕ Редакция 1.0.DOCX</arguments>
+      </matcher>
+    </filter>
+    <filter>
+      <name/>
+      <type>6</type>
+      <matcher>
+        <id>org.eclipse.ui.ide.multiFilter</id>
+        <arguments>1.0-name-matches-false-false-.gitignore</arguments>
+      </matcher>
+    </filter>
   </filteredResources>
 </projectDescription>

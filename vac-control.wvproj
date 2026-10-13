@@ -26,6 +26,16 @@
 				"parentLogicPath": "",
 				"type": "file",
 				"name": "*.wvproj"
+			},
+			{
+				"parentLogicPath": "",
+				"type": "file",
+				"name": "ТЕХНИЧЕСКОЕ ЗАДАНИЕ Редакция 1.0.DOCX"
+			},
+			{
+				"name": ".gitignore",
+				"parentLogicPath": "",
+				"type": "file"
 			}
 		],
 		"projectName": "vac-control",
