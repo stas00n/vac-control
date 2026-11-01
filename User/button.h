@@ -6,7 +6,8 @@
 
 /* §´§Ú§á §Õ§Ö§Û§ã§ä§Ó§Ú§ñ §ß§Ñ §Ü§à§ä§à§â§à§Ö §Ü§ß§à§á§Ü§Ñ §Ò§å§Õ§Ö§ä §â§Ö§Ñ§Ô§Ú§â§à§Ó§Ñ§ä§î */
 typedef enum {
-    BTN_PUSH = 0,
+    BTN_DISABLED = 0,
+    BTN_PUSH,
     BTN_HOLD,
     BTN_CLICK,
     BTN_DBLCLICK

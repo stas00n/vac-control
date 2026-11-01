@@ -1,6 +1,7 @@
 #include "Init.h"
 #include "ch32v00x_conf.h"
 #include "io_conf.h"
+#include "SysTick.h"
 
 
 static void Init_IO(void);
@@ -8,13 +9,13 @@ static void Init_TIM(void);
 static void Init_SysTick(void);
 static void Init_ADC(void);
 
+extern uint32_t SystemCoreClock;
 
 void Init() {
     Init_IO();
-    //Init_TIM();
+    Init_TIM();
     Init_ADC();
     Init_SysTick();
-    
 }
 
 void Init_IO(void) {
@@ -61,83 +62,48 @@ void Init_IO(void) {
     OPA_Init(&opa);
     OPA_Cmd(ENABLE);
 
-    /* Вход PPM, TIM2_CH1 (PC1) */
-    //gpio.GPIO_Mode = GPIO_Mode_IPD;
-    //GPIO_Init_Single(&gpio, PIN_INPUT, 0);
-    /* TIM2_RM[1:0] 10: Partial mapping 2(CH1/ETR/PC1, CH2/PD3, CH3/PC0, CH4/PD7). */
-    //GPIO_PinRemapConfig(GPIO_PartialRemap2_TIM2, ENABLE);
+    /* PD5 - T2CH4_3 - PWM выход вкл насоса */
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+    gpio.GPIO_Pin = GPIO_Pin_5;
+    GPIO_Init(GPIOD, &gpio);
+    /* TIM2_RM[1:0] = 0b11: Complete mapping (CH1/ETR/PC1, CH2/PC7, CH3/PD6, CH4/PD5). */
+    GPIO_PinRemapConfig(GPIO_FullRemap_TIM2, ENABLE);
 
-    /* Выход тестового сигнала - TIM1_CH2 (PA1) */
-    //gpio.GPIO_Mode = GPIO_Mode_AF_PP;
-    //GPIO_Init_Single(&gpio, PIN_TEST_OUT, 0);
-    /* TIM1_RM[1:0] 00: Default mapping (ETR/PC5, CH1/PD2, CH2/PA1, CH3/PC3, CH4/PC4, BKIN/PC2, CH1N/PD0, CH2N/PA2, CH3N/PD1). */
-    
 }
 
 void Init_TIM(void) {
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
-    /* TIM1 CH2 - генератор тестового сигнала PPM */
+    /* PD5 - T2CH4_3 - PWM выход вкл насоса */
+    /* TIM2_RM[1:0] = 0b11: Complete mapping (CH1/ETR/PC1, CH2/PC7, CH3/PD6, CH4/PD5). */
+    
     TIM_TimeBaseInitTypeDef timebase;
     timebase.TIM_ClockDivision = TIM_CKD_DIV4;
     timebase.TIM_CounterMode = TIM_CounterMode_Up;
     timebase.TIM_RepetitionCounter = 0;
-    timebase.TIM_Prescaler = 7;       // 1 MHz clock
-    timebase.TIM_Period = 19999;      // 20 ms period
-    TIM_TimeBaseInit(TIM1, &timebase);
+    timebase.TIM_Prescaler = 9;//SystemCoreClock / 1000000ul - 1;       // 1 MHz TIM2 clock
+    timebase.TIM_Period = 240;      // 10 кГц частота ШИМ
+    TIM_TimeBaseInit(TIM2, &timebase);
 
 
     TIM_OCInitTypeDef tim_oc;
     TIM_OCStructInit(&tim_oc);
 
-    tim_oc.TIM_OCMode = TIM_OCMode_PWM2;
+    tim_oc.TIM_OCMode = TIM_OCMode_PWM1;
     tim_oc.TIM_OutputState = TIM_OutputState_Enable;
     tim_oc.TIM_OutputNState =TIM_OutputNState_Disable;
-    tim_oc.TIM_Pulse = 2000;
-    tim_oc.TIM_OCPolarity = TIM_OCPolarity_Low;
+    tim_oc.TIM_Pulse = 0;
+    tim_oc.TIM_OCPolarity = TIM_OCPolarity_High;
     tim_oc.TIM_OCNPolarity = TIM_OCNPolarity_High;
-    /* Канал 2! */
-    TIM_OC2Init(TIM1, &tim_oc);
-    TIM_CtrlPWMOutputs(TIM1, ENABLE );
-    TIM_OC2PreloadConfig( TIM1, TIM_OCPreload_Disable );
-    TIM_ARRPreloadConfig( TIM1, ENABLE );
-    TIM_Cmd(TIM1, ENABLE); 
-
-    /* TIM2 CH1 - захват входного сигнала  */
-    timebase.TIM_Period = 22000 - 1;    // Макс. период на захват +10% (22 мс)
-    TIM_TimeBaseInit(TIM2, &timebase);
-
-    /* Захват по отрицательному фронту канала 1 */
-    TIM_ICInitTypeDef tim_ic;
-    TIM_ICStructInit(&tim_ic);
-    tim_ic.TIM_Channel = TIM_Channel_1;
-    tim_ic.TIM_ICPolarity = TIM_ICPolarity_Falling;
-    tim_ic.TIM_ICSelection = TIM_ICSelection_DirectTI;
-    TIM_ICInit(TIM2, &tim_ic);
-
-    /* Сброс по положительному фронту TI1F_ED (доступен только от канала 1) */
-    TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Reset);
-    TIM_SelectInputTrigger(TIM2, TIM_TS_TI1F_ED);
-    TIM_ETRConfig(TIM2, TIM_ExtTRGPSC_OFF, TIM_ExtTRGPolarity_NonInverted, 0);
-
-    /* Прерывание по захвату и обновлению */
-    NVIC_InitTypeDef nvic;
-    nvic.NVIC_IRQChannel = TIM2_IRQn;
-    nvic.NVIC_IRQChannelPreemptionPriority = 1;
-    nvic.NVIC_IRQChannelSubPriority = 0;
-    nvic.NVIC_IRQChannelCmd = ENABLE;
-    NVIC_Init(&nvic);
-
-    TIM_ITConfig(TIM2, (TIM_IT_CC1 | TIM_IT_Update), ENABLE);
-    TIM_Cmd(TIM2, ENABLE);
+    /* Канал 4 */
+    TIM_OC4Init(TIM2, &tim_oc);
+    //TIM_CtrlPWMOutputs(TIM2, ENABLE );
+    TIM_OC2PreloadConfig( TIM2, TIM_OCPreload_Disable );
+    TIM_ARRPreloadConfig( TIM2, ENABLE );
+    TIM_Cmd(TIM2, ENABLE); 
 }
 
-#define STK_CTLR_STE        0x1
-#define STK_CTLR_STIE       0x2
-#define STK_CTLR_STCLK      0x4
-#define STK_CTLR_STRE       0x8
-#define STK_CTLR_SWIE       0x80000000
+
 
 void Init_SysTick(void) {
     NVIC_EnableIRQ(SysTick_IRQn);
@@ -161,8 +127,8 @@ void Init_ADC(void) {
 
     ADC_Cmd(ADC1, ENABLE);
 
-  //  ADC_ITConfig(ADC1, ADC_IT_EOC, ENABLE);
-    //NVIC_EnableIRQ(ADC_IRQn);
+    ADC_ITConfig(ADC1, ADC_IT_EOC, ENABLE);
+    NVIC_EnableIRQ(ADC_IRQn);
 }
 
 
