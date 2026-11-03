@@ -52,9 +52,9 @@ void Init_IO(void) {
     gpio.GPIO_Pin = GPIO_Pin_0;
     GPIO_Init(GPIOD, &gpio);
 
-    /* PA0, PA1 - входы ОУ */
+    /* PA1, PA2 - входы ОУ */
     gpio.GPIO_Mode = GPIO_Mode_AIN;
-    gpio.GPIO_Pin = (GPIO_Pin_0 | GPIO_Pin_1);
+    gpio.GPIO_Pin = (GPIO_Pin_1 | GPIO_Pin_2);
     GPIO_Init(GPIOA, &gpio);
 
     /* Включаем ОУ */
@@ -81,7 +81,7 @@ void Init_TIM(void) {
     timebase.TIM_ClockDivision = TIM_CKD_DIV4;
     timebase.TIM_CounterMode = TIM_CounterMode_Up;
     timebase.TIM_RepetitionCounter = 0;
-    timebase.TIM_Prescaler = 9;//SystemCoreClock / 1000000ul - 1;       // 1 MHz TIM2 clock
+    timebase.TIM_Prescaler = 9;     // 2,4 MHz TIM2 clock
     timebase.TIM_Period = 240;      // 10 кГц частота ШИМ
     TIM_TimeBaseInit(TIM2, &timebase);
 
@@ -97,7 +97,6 @@ void Init_TIM(void) {
     tim_oc.TIM_OCNPolarity = TIM_OCNPolarity_High;
     /* Канал 4 */
     TIM_OC4Init(TIM2, &tim_oc);
-    //TIM_CtrlPWMOutputs(TIM2, ENABLE );
     TIM_OC2PreloadConfig( TIM2, TIM_OCPreload_Disable );
     TIM_ARRPreloadConfig( TIM2, ENABLE );
     TIM_Cmd(TIM2, ENABLE); 
