@@ -6,7 +6,7 @@
 
 static void Init_IO(void);
 static void Init_TIM(void);
-static void Init_SysTick(void);
+
 static void Init_ADC(void);
 
 extern uint32_t SystemCoreClock;
@@ -18,7 +18,7 @@ void Init() {
     Init_SysTick();
 }
 
-void Init_IO(void) {
+static void Init_IO(void) {
     RCC_APB2PeriphClockCmd((RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO), ENABLE);
 
     GPIO_InitTypeDef gpio;
@@ -71,7 +71,7 @@ void Init_IO(void) {
 
 }
 
-void Init_TIM(void) {
+static void Init_TIM(void) {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
     /* PD5 - T2CH4_3 - PWM выход вкл насоса */
@@ -105,15 +105,15 @@ void Init_TIM(void) {
 
 
 void Init_SysTick(void) {
-    NVIC_EnableIRQ(SysTick_IRQn);
-    SysTick->SR &= ~(1 << 0);
+    SysTick->SR &= ~STK_SR_CNTIF;
     SysTick->CMP = SystemCoreClock / 1000 - 1;
     SysTick->CNT = 0;
     SysTick->CTLR = (STK_CTLR_STE | STK_CTLR_STIE | STK_CTLR_STCLK | STK_CTLR_STRE);
+    NVIC_EnableIRQ(SysTick_IRQn);
 }
 
 
-void Init_ADC(void) {
+static void Init_ADC(void) {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
     ADC_InitTypeDef adc;
     ADC_StructInit(&adc);

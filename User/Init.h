@@ -5,8 +5,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-     void Init();
+    void Init_SysTick(void);
+    void Init();
 
 #ifdef __cplusplus
 }

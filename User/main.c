@@ -39,7 +39,8 @@ typedef enum {
     MODE_IDLE,
     MODE_PUMP,
     MODE_TRACK,
-    MODE_HOLD
+    MODE_HOLD,
+    MODE_WAKEUP
 } OpMode_t;
 
 static OpMode_t opMode = MODE_IDLE;
@@ -68,7 +69,7 @@ static uint16_t p_sensor_Filtered = 0U;
 static int16_t  p_derivative = INT16_MAX;
 static uint8_t  vac_percent = 0U;
 static uint8_t  dispValue = 0U;
-
+static int buttonWakupLock = 0;
 
 
 /* -----------------------------------------------------------------------------
@@ -116,6 +117,15 @@ int main(void) {
 
         switch (opMode) {
             case MODE_IDLE: {
+                /* §Ø§Õ§Ö§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú §à§ä §Õ§Ý§Ú§ä§Ö§Ý§î§ß§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ §á§â§Ú §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§Ú */
+                if(buttonWakupLock) {
+                    if(GPIO_ReadInputDataBit(PIN_BTN)) {
+                        Delay_ms(20);   // §Ü§ß§à§á§Ü§Ñ §à§ä§á§å§ë§Ö§ß§Ñ, §á§Ñ§å§Ù§Ñ §ß§Ñ §Õ§â§Ö§Ò§Ö§Ù§Ô
+                        Button_SetAction(BTN_PUSH); // §Ó§Ü§Ý§ð§é§Ñ§Ö§Þ §ê§ä§Ñ§ä§ß§í§Û §à§á§â§à§ã §Ü§ß§à§á§Ü§Ú
+                        buttonWakupLock = 0;
+                    }
+                    break; // §Ò§à§Ý§î§ê§Ö §ß§Ú§é§Ö§Ô§à §ß§Ö §Õ§Ö§Ý§Ñ§Ö§Þ §á§à§Ü§Ñ §Ü§ß§à§á§Ü§Ñ §ß§Ö §à§ä§á§å§ë§Ö§ß§Ñ
+                }
                 /* §±§à§Ý§å§é§Ñ§Ö§Þ §ã§à§Ò§í§ä§Ú§Ö §Ü§ß§à§á§Ü§Ú (§ä§Ú§á TBTNEVT §à§á§â§Ö§Õ§Ö§Ý§×§ß §Ó button.h) */
                 TBTNEVT btnEvt = (TBTNEVT)Button_GetEvt();
 
@@ -124,21 +134,21 @@ int main(void) {
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
                 }
 
+                /* §°§Ò§â§Ñ§Ò§à§ä§Ü§Ñ §à§Õ§Ú§ß§à§é§ß§à§Ô§à §Ü§Ý§Ú§Ü§Ñ: §ã§ä§Ñ§â§ä §ß§Ñ§Ü§Ñ§é§Ü§Ú */
+                if (btnEvt == BTN_EVT_SINGLE) {
+                    opMode = MODE_PUMP;
+                    Vac_Start();
+                    timers.motorProtect = MOTOR_PROTECT_TIME_MS;
+                    break;
+                }
+
                 /* §­§à§Ô§Ú§Ü§Ñ §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §ã§à§ß §á§à §ä§Ñ§Û§Þ§Ö§â§å */
                 if (timers.toSleep == 0U) {
                     Standby();
                     /* §±§à§ã§Ý§Ö Standby §®§¬ §å§ç§à§Õ§Ú§ä §Ó §Ô§Ý§å§Ò§à§Ü§Ú§Û §ã§à§ß, §ß§à §Ö§ã§Ý§Ú §á§â§à§Ò§å§Õ§Ú§ä§ã§ñ,
                        §ä§à §ß§å§Ø§ß§à §Ò§å§Õ§Ö§ä §Ü§à§â§â§Ö§Ü§ä§ß§à §Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ú§â§à§Ó§Ñ§ä§î §ã§à§ã§ä§à§ñ§ß§Ú§Ö §Ù§Ñ§ß§à§Ó§à.
                        §¥§Ý§ñ §á§â§à§ã§ä§à§ä§í §ã§é§Ú§ä§Ñ§Ö§Þ, §é§ä§à Standby() §Õ§Ö§Ý§Ñ§Ö§ä §Ó§ã§× §ß§Ö§à§Ò§ç§à§Õ§Ú§Þ§à§Ö. */
-                    //break; 
-                }
-
-                /* §°§Ò§â§Ñ§Ò§à§ä§Ü§Ñ §à§Õ§Ú§ß§à§é§ß§à§Ô§à §Ü§Ý§Ú§Ü§Ñ: §ã§ä§Ñ§â§ä §ß§Ñ§Ü§Ñ§é§Ü§Ú */
-                if (btnEvt == BTN_EVT_SINGLE) {
-                    opMode = MODE_PUMP;
-                    Vac_Start();
-                    timers.motorProtect = MOTOR_PROTECT_TIME_MS;
-                    //break;
+                    break; 
                 }
                 break;
             }
@@ -206,6 +216,31 @@ int main(void) {
                 }
                 break;
             }
+            
+            case MODE_WAKEUP:
+                /* §°§Ø§Ú§Õ§Ñ§Ö§Þ §å§Õ§Ö§â§Ø§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú 1 §ã */
+                Delay_ms(50);   // §á§Ñ§å§Ù§Ñ §á§à§Õ§Ñ§Ó§Ý§Ö§ß§Ú§ñ §Õ§â§Ö§Ò§Ö§Ù§Ô§Ñ
+                timers.delay = 950;
+                int btnHold = 1;
+                while(timers.delay) {
+                    if(GPIO_ReadInputDataBit(PIN_BTN)) {
+                        btnHold = 0;
+                        break;  /* while break */
+                    }
+                }
+                if(!btnHold) {
+                    /* §Ü§ß§à§á§Ü§å §à§ä§á§å§ã§ä§Ú§Ý§Ú §â§Ñ§ß§î§ê§Ö 1 §ã, §Ù§Ñ§ã§í§á§Ñ§Ö§Þ §à§Ò§â§Ñ§ä§ß§à */
+                    Standby();
+                    break;
+                }
+                else {
+                    Init(); // §â§Ö§Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ñ§è§Ú§ñ §á§Ö§â§Ú§æ§Ö§â§Ú§Ú §Ú SysTick
+                    GPIO_SetBits(PIN_EN);   // §£§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§ñ
+                    timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
+                    buttonWakupLock = 1;
+                    opMode = MODE_IDLE;
+                }
+            break;
 
             default:
                 break;
@@ -218,6 +253,16 @@ int main(void) {
  * ---------------------------------------------------------------------------*/
 void SysTick_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void SysTick_Handler(void) {
+    /* §Ó §â§Ö§Ø§Ú§Þ§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ §â§Ñ§Ò§à§ä§Ñ§Ö§ä §ä§à§Ý§î§Ü§à §ä§Ñ§Û§Þ§Ö§â §Õ§Ý§ñ Delay_ms() */
+    if(opMode == MODE_WAKEUP) {
+        if (timers.delay > 0) {
+            timers.delay--;
+        }
+        SysTick->SR = 0;
+        return;
+    }
+
+    /* §³§ä§Ñ§â§ä§å§Ö§Þ §á§â§Ö§à§Ò§â§Ñ§Ù§à§Ó§Ñ§ß§Ú§Ö */
     ADC_SoftwareStartConvCmd(ADC1, ENABLE);
 
     /* §±§Ý§Ñ§Ó§ß§í§Û §â§Ñ§Ù§Ô§à§ß §Þ§à§ä§à§â§Ñ */
@@ -348,17 +393,23 @@ static void Task500(void) {
  * ---------------------------------------------------------------------------*/
 void Standby(void) {
     // §°§ã§ä§Ñ§ß§Ñ§Ó§Ý§Ú§Ó§Ñ§Ö§Þ SysTick, §é§ä§à§Ò§í §á§à§Ô§Ñ§ã§Ú§ä§î §Õ§Ú§ã§á§Ý§Ö§Û
+    NVIC_DisableIRQ(SysTick_IRQn);
     SysTick->CTLR &= ~STK_CTLR_STE;
     // §£§í§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§Ö §Ú §ã§Ö§ß§ã§à§â
     GPIO_ResetBits(PIN_EN);
     // §£§í§Ü§Ý §Õ§Ú§ã§á§Ý§Ö§Û
     GPIO_ResetBits(PIN_DISP_0);
     GPIO_ResetBits(PIN_DISP_1);
+
+    // §£§í§Ü§Ý §°§µ
+    OPA_Cmd(DISABLE);
+    
+    // §£§í§Ü§Ý §¡§¸§±
+    ADC_Cmd(ADC1, DISABLE);
+
     // §¬§à§ß§æ§Ú§Ô §ã§à§Ò§í§ä§Ú§ñ §Õ§Ý§ñ §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ
-    EXTI_InitTypeDef EXTI_InitStructure = {0};
-
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-
+    EXTI_InitTypeDef EXTI_InitStructure = {0};
     EXTI_InitStructure.EXTI_Line = EXTI_Line0;  // §¬§ß§à§á§Ü§Ñ §ß§Ñ PD0
     EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Event;
     EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;
@@ -367,26 +418,13 @@ void Standby(void) {
     // §¬§à§ß§æ§Ú§Ô§å§â§Ú§â§å§Ö§Þ §ß§Ñ GPIOD
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource0);
 
-    // §£§í§Ü§Ý §°§µ
-    OPA_Cmd(DISABLE);
-    GPIO_InitTypeDef gpio;
-    gpio.GPIO_Pin = GPIO_Pin_All;
-    gpio.GPIO_Mode = GPIO_Mode_IPD;
-
-    // §£§ã§Ö GPIO §Ü§â§à§Þ§Ö PD0 - §á§à§Õ§ä§ñ§Ø§Ü§Ñ §Ó§ß§Ú§Ù §á§Ö§â§Ö§Õ §ã§ß§à§Þ
-    GPIO_Init(GPIOA, &gpio);
-    GPIO_Init(GPIOC, &gpio);
-    
-    // §£§í§Ü§Ý §¡§¸§±
-    ADC_Cmd(ADC1, DISABLE);
-
     // §µ§ã§í§á§Ý§ñ§Ö§Þ
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
 
 #ifdef ENABLE_DEBUG_IN_LOWPOWER_MODE
 #define PFIC_SCTLR_DEEPSLEEP    ((uint32_t)4)
 /*!< Low-power mode of the control system. 1: DEEPSLEEP 0: SLEEP */
-    // §£§ç§à§Õ §Ó Sleep mode §Ó§Þ§Ö§ã§ä§à Standby, §é§ä§à§Ò§í §à§ã§ä§Ñ§Ý§ã§ñ §â§Ñ§Ò§à§ä§Ñ§ä§î §à§ä§Ý§Ñ§Õ§é§Ú§Ü
+    /* §£§ç§à§Õ §Ó Sleep mode §Ó§Þ§Ö§ã§ä§à Standby, §é§ä§à§Ò§í §à§ã§ä§Ñ§Ý§ã§ñ §â§Ñ§Ò§à§ä§Ñ§ä§î §à§ä§Ý§Ñ§Õ§é§Ú§Ü */
     PWR->CTLR = 0;
     NVIC->SCTLR &= ~PFIC_SCTLR_DEEPSLEEP;
     __WFE();
@@ -395,8 +433,9 @@ void Standby(void) {
 #endif
 
     // §±§à§ã§Ý§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ:
-    Init(); // §â§Ö§Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ñ§è§Ú§ñ §á§Ö§â§Ú§æ§Ö§â§Ú§Ú §Ú SysTick
-    GPIO_SetBits(PIN_EN);   // §£§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§ñ
-    timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
-    opMode = MODE_IDLE;
+    Button_SetAction(BTN_DISABLED);
+    Init_SysTick();
+    opMode = MODE_WAKEUP;
+    return;
+  
 }
