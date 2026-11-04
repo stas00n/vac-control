@@ -69,7 +69,6 @@ static uint16_t p_sensor_Filtered = 0U;
 static int16_t  p_derivative = INT16_MAX;
 static uint8_t  vac_percent = 0U;
 static uint8_t  dispValue = 0U;
-static int buttonWakupLock = 0;
 
 
 /* -----------------------------------------------------------------------------
@@ -102,10 +101,8 @@ int main(void) {
     Init();
 
     GPIO_SetBits(PIN_EN);           /* §£§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§Ö §ã§ç§Ö§Þ§í */
-    
-    Delay_ms(200U);                 /* §Ù§Ñ§Õ§Ö§â§Ø§Ü§Ñ §à§Ò§â§Ñ§Ò§à§ä§Ü§Ú §Ü§ß§à§á§Ü§Ú §á§â§Ú §ã§ä§Ñ§â§ä§Ö */
-    Button_SetAction(BTN_PUSH);     /* §Ó§Ü§Ý §à§Ò§â§Ñ§Ò§à§ä§Ü§å §Ü§ß§à§á§Ü§Ú */
-
+    Delay_ms(200U);                 /* §á§Ñ§å§Ù§Ñ §ß§Ñ §ã§ä§Ñ§Ò§Ú§Ý§Ú§Ù§Ñ§è§Ú§ð */
+    Button_Enable();                /* §ã§Ñ§Þ §Õ§à§Ø§Õ§×§ä§ã§ñ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú */
 
 
     while (1) {
@@ -115,27 +112,26 @@ int main(void) {
             timers.flag_500ms = 0;
         }
 
+
+
         switch (opMode) {
             case MODE_IDLE: {
-                /* §Ø§Õ§Ö§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú §à§ä §Õ§Ý§Ú§ä§Ö§Ý§î§ß§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ §á§â§Ú §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§Ú */
-                if(buttonWakupLock) {
-                    if(GPIO_ReadInputDataBit(PIN_BTN)) {
-                        Delay_ms(20);   // §Ü§ß§à§á§Ü§Ñ §à§ä§á§å§ë§Ö§ß§Ñ, §á§Ñ§å§Ù§Ñ §ß§Ñ §Õ§â§Ö§Ò§Ö§Ù§Ô
-                        Button_SetAction(BTN_PUSH); // §Ó§Ü§Ý§ð§é§Ñ§Ö§Þ §ê§ä§Ñ§ä§ß§í§Û §à§á§â§à§ã §Ü§ß§à§á§Ü§Ú
-                        buttonWakupLock = 0;
-                    }
-                    break; // §Ò§à§Ý§î§ê§Ö §ß§Ú§é§Ö§Ô§à §ß§Ö §Õ§Ö§Ý§Ñ§Ö§Þ §á§à§Ü§Ñ §Ü§ß§à§á§Ü§Ñ §ß§Ö §à§ä§á§å§ë§Ö§ß§Ñ
-                }
+                
+
+
                 /* §±§à§Ý§å§é§Ñ§Ö§Þ §ã§à§Ò§í§ä§Ú§Ö §Ü§ß§à§á§Ü§Ú (§ä§Ú§á TBTNEVT §à§á§â§Ö§Õ§Ö§Ý§×§ß §Ó button.h) */
                 TBTNEVT btnEvt = (TBTNEVT)Button_GetEvt();
-
+// §ä§Ö§ã§ä HOLD
+if (btnEvt == BTN_EVT_HOLD) {
+    dispValue = 25;
+}
                 /* §¦§ã§Ý§Ú §Ö§ã§ä§î §­§À§¢§°§¦ §ã§à§Ò§í§ä§Ú§Ö §à§ä §Ü§ß§à§á§Ü§Ú ¡ª §ã§Ò§â§Ñ§ã§í§Ó§Ñ§Ö§Þ §ä§Ñ§Û§Þ§Ö§â §ã§ß§Ñ */
                 if (btnEvt != BTN_EVT_NONE) {
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
                 }
 
                 /* §°§Ò§â§Ñ§Ò§à§ä§Ü§Ñ §à§Õ§Ú§ß§à§é§ß§à§Ô§à §Ü§Ý§Ú§Ü§Ñ: §ã§ä§Ñ§â§ä §ß§Ñ§Ü§Ñ§é§Ü§Ú */
-                if (btnEvt == BTN_EVT_SINGLE) {
+                if (btnEvt == BTN_EVT_CLICK) {
                     opMode = MODE_PUMP;
                     Vac_Start();
                     timers.motorProtect = MOTOR_PROTECT_TIME_MS;
@@ -159,7 +155,7 @@ int main(void) {
                     timers.motorProtect = MOTOR_PROTECT_TIME_MS;
                 }
                 /* §¦§ã§Ý§Ú §ä§Ñ§Û§Þ§Ñ§å§ä §á§à §Ù§Ñ§ë§Ú§ä§Ö §Ú§Ý§Ú §ß§Ñ§Ø§Ñ§Ý§Ú §Ü§ß§à§á§Ü§å - §à§ã§ä§Ñ§ß§à§Ó, §ã§Ò§â§à§ã §Ó§Ñ§Ü§å§å§Þ§Ñ, §Ó§í§ç§à§Õ §Ó IDLE */
-                if ((timers.motorProtect == 0U) || (Button_GetEvt() == BTN_EVT_SINGLE)) {
+                if ((timers.motorProtect == 0U) || (Button_GetEvt() == BTN_EVT_CLICK)) {
                     Vac_Stop();
                     opMode = MODE_IDLE;
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
@@ -237,8 +233,8 @@ int main(void) {
                     Init(); // §â§Ö§Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ñ§è§Ú§ñ §á§Ö§â§Ú§æ§Ö§â§Ú§Ú §Ú SysTick
                     GPIO_SetBits(PIN_EN);   // §£§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§ñ
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
-                    buttonWakupLock = 1;
                     opMode = MODE_IDLE;
+                    Button_Enable();
                 }
             break;
 
@@ -432,10 +428,9 @@ void Standby(void) {
     PWR_EnterSTANDBYMode(PWR_STANDBYEntry_WFE);
 #endif
 
-    // §±§à§ã§Ý§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ:
-    Button_SetAction(BTN_DISABLED);
+    /* §±§à§ã§Ý§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ: */
     Init_SysTick();
     opMode = MODE_WAKEUP;
-    return;
-  
+    /* §Ø§Õ§Ö§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú §à§ä §Õ§Ý§Ú§ä§Ö§Ý§î§ß§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ §á§â§Ú §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§Ú */
+    //            Button_Enable();
 }

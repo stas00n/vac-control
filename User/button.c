@@ -1,58 +1,54 @@
 #include "io_conf.h"
 #include "ch32v00x_conf.h"
 #include "button.h"
-#include <stdbool.h>
+
+#define DEBOUNCE_TICK_COUNT      10U       /* §Þ§ã §á§à§Õ§Ñ§Ó§Ý§Ö§ß§Ú§ñ §Õ§â§Ö§Ò§Ö§Ù§Ô§Ñ */
+#define DOUBLE_CLICK_TIMEOUT_MS  300U      /* §à§Ü§ß§à §Þ§Ö§Ø§Õ§å §Ü§Ý§Ú§Ü§Ñ§Þ§Ú */
+#define HOLD_TIME_MS             1000U     /* §á§à§â§à§Ô §Õ§Ý§Ú§ä§Ö§Ý§î§ß§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ */
+
+/* §¤§â§å§Ò§Ñ§ñ §Ù§Ñ§Õ§Ö§â§Ø§Ü§Ñ ~1 §Þ§ã, §ß§Ö §Ù§Ñ§Ó§Ú§ã§Ú§ä §à§ä SysTick (§ß§å§Ø§ß§Ñ §Õ§Ý§ñ Button_Enable).
+   §¬§à§ï§æ§æ§Ú§è§Ú§Ö§ß§ä 5 ¡ª §á§â§Ú§Þ§Ö§â§ß§à §ä§Ñ§Ü§ä§à§Ó §ß§Ñ §Ú§ä§Ö§â§Ñ§è§Ú§ð volatile-§è§Ú§Ü§Ý§Ñ. */
+extern uint32_t SystemCoreClock;
+static void BusyDelayMs(uint32_t ms) {
+    while (ms--) {
+        for (volatile uint32_t i = 0; i < (SystemCoreClock / 5000U); i++);
+    }
+}
 
 /* -----------------------------------------------------------------------------
- * §¬§à§ß§æ§Ú§Ô§å§â§Ñ§è§Ú§ñ §ä§Ñ§Û§Þ§Ú§ß§Ô§à§Ó (§á§à§Õ§Ò§Ú§â§Ñ§Ö§ä§ã§ñ §á§à§Õ §á§Ý§Ñ§ä§å §Ú §Ü§ß§à§á§Ü§å)
- * ---------------------------------------------------------------------------*/
-#define DEBOUNCE_TICK_COUNT      10U       /* §ä§Ú§Ü§à§Ó §á§à 1 §Þ§ã §Õ§Ý§ñ §á§à§Õ§Ñ§Ó§Ý§Ö§ß§Ú§ñ §Õ§â§Ö§Ò§Ö§Ù§Ô§Ñ */
-#define DOUBLE_CLICK_TIMEOUT_MS  300U      /* §Þ§Ñ§Ü§ã. §Ù§Ñ§Õ§Ö§â§Ø§Ü§Ñ §Þ§Ö§Ø§Õ§å 1-§Þ §Ú 2-§Þ §ß§Ñ§Ø§Ñ§ä§Ú§Ö§Þ */
-
-/* -----------------------------------------------------------------------------
- * §­§à§Ü§Ñ§Ý§î§ß§í§Ö §á§Ö§â§Ö§Þ§Ö§ß§ß§í§Ö
- * ---------------------------------------------------------------------------*/
-static TBTNACTION btnAct = BTN_DISABLED;
-static TBTNEVT btnEvt = BTN_EVT_NONE;
-
-/* -----------------------------------------------------------------------------
- * §®§Ñ§ê§Ú§ß§Ñ §ã§à§ã§ä§à§ñ§ß§Ú§Û §Ü§ß§à§á§Ü§Ú
+ * §®§Ñ§ê§Ú§ß§Ñ §ã§à§ã§ä§à§ñ§ß§Ú§Û
  * ---------------------------------------------------------------------------*/
 typedef enum {
-    SM_WAIT_PRESS,
-    SM_DEBOUNCE_PRESS,
-    SM_WAIT_RELEASE,
-    SM_DEBOUNCE_RELEASE,
-    SM_WAIT_SECOND_PRESS
+    SM_WAIT_PRESS,        /* §Ø§Õ§×§Þ §ß§Ñ§Ø§Ñ§ä§Ú§ñ */
+    SM_DEBOUNCE_PRESS,    /* §Õ§â§Ö§Ò§Ö§Ù§Ô §á§â§Ú §ß§Ñ§Ø§Ñ§ä§Ú§Ú */
+    SM_WAIT_RELEASE,      /* §Ø§Õ§×§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ú§Ý§Ú §Ú§ã§ä§Ö§é§Ö§ß§Ú§ñ HOLD_TIME */
+    SM_HOLD_DETECTED,     /* HOLD §Ù§Ñ§æ§Ú§Ü§ã§Ú§â§à§Ó§Ñ§ß, §Ø§Õ§×§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ */
+    SM_DEBOUNCE_RELEASE,  /* §Õ§â§Ö§Ò§Ö§Ù§Ô §á§â§Ú §à§ä§á§å§ã§Ü§Ñ§ß§Ú§Ú */
+    SM_WAIT_SECOND_PRESS  /* §à§Ü§ß§à §à§Ø§Ú§Õ§Ñ§ß§Ú§ñ §Ó§ä§à§â§à§Ô§à §Ü§Ý§Ú§Ü§Ñ */
 } ButtonState;
 
+static volatile uint8_t btnEnabled = 0;
+static TBTNEVT     btnEvt = BTN_EVT_NONE;
 static ButtonState btnState = SM_WAIT_PRESS;
-static uint32_t debounceCounter = 0;
-static uint32_t doubleClickTimer = 0;  /* §ä§Ñ§Û§Þ§Ö§â §à§Ø§Ú§Õ§Ñ§ß§Ú§ñ §Ó§ä§à§â§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ */
+static uint32_t    debounceCounter  = 0;
+static uint32_t    doubleClickTimer = 0;
+static uint32_t    holdTimer        = 0;
+static uint8_t     holdOccurred     = 0;  /* §á§à§ã§Ý§Ö HOLD CLICK §ß§Ö §Ô§Ö§ß§Ö§â§Ú§â§å§Ö§Þ */
+static uint8_t     dblCandidate     = 0;  /* §ï§ä§à §ß§Ñ§Ø§Ñ§ä§Ú§Ö ¡ª §Ü§Ñ§ß§Õ§Ú§Õ§Ñ§ä §Ó DOUBLE */
 
-/* -----------------------------------------------------------------------------
- * §£§ã§á§à§Þ§à§Ô§Ñ§ä§Ö§Ý§î§ß§Ñ§ñ §æ§å§ß§Ü§è§Ú§ñ: §é§ä§Ö§ß§Ú§Ö §ã§à§ã§ä§à§ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú
- * §£§à§Ù§Ó§â§Ñ§ë§Ñ§Ö§ä 1, §Ö§ã§Ý§Ú §Ü§ß§à§á§Ü§Ñ §ß§Ñ§Ø§Ñ§ä§Ñ (§Ñ§Ü§ä§Ú§Ó§ß§í§Û §ß§Ú§Ù§Ü§Ú§Û §å§â§à§Ó§Ö§ß§î)
- * ---------------------------------------------------------------------------*/
 static bool Button_IsPressed(void) {
     return !GPIO_ReadInputDataBit(PIN_BTN);
 }
 
-/* -----------------------------------------------------------------------------
- * §°§ã§ß§à§Ó§ß§à§Û §à§Ò§â§Ñ§Ò§à§ä§é§Ú§Ü ¡ª §Ó§í§Ù§í§Ó§Ñ§ä§î §Ü§Ñ§Ø§Õ§í§Û 1 §Þ§ã
- * ---------------------------------------------------------------------------*/
 void Button_OnTick(void) {
-    if (btnAct == BTN_DISABLED) {
-        btnState = SM_WAIT_PRESS;
-        return;
-    }
+    if (!btnEnabled) return;
 
     bool pressed = Button_IsPressed();
 
     switch (btnState) {
         case SM_WAIT_PRESS:
             if (pressed) {
-                /* §¯§Ñ§Ø§Ñ§ä§Ú§Ö §à§Ò§ß§Ñ§â§å§Ø§Ö§ß§à ¡ª §á§Ö§â§Ö§ç§à§Õ§Ú§Þ §Ü §á§à§Õ§Ñ§Ó§Ý§Ö§ß§Ú§ð §Õ§â§Ö§Ò§Ö§Ù§Ô§Ñ */
+                dblCandidate = (doubleClickTimer > 0U) ? 1U : 0U;
                 btnState = SM_DEBOUNCE_PRESS;
                 debounceCounter = DEBOUNCE_TICK_COUNT;
             }
@@ -60,82 +56,116 @@ void Button_OnTick(void) {
 
         case SM_DEBOUNCE_PRESS:
             if (!pressed) {
-                /* §°§ä§á§å§ã§ä§Ú§Ý§Ú §â§Ñ§ß§î§ê§Ö §Ó§â§Ö§Þ§Ö§ß§Ú ¡ª §ã§Ò§â§à§ã */
                 btnState = SM_WAIT_PRESS;
-            } else {
-                if (debounceCounter > 0) {
-                    debounceCounter--;
-                } else {
-                    /* §¥§â§Ö§Ò§Ö§Ù§Ô §á§à§Õ§Ñ§Ó§Ý§Ö§ß, §Ü§ß§à§á§Ü§Ñ §ä§à§é§ß§à §ß§Ñ§Ø§Ñ§ä§Ñ */
-                    btnState = SM_WAIT_RELEASE;
-                }
+            } else if (--debounceCounter == 0U) {
+                holdTimer = HOLD_TIME_MS;
+                btnState = SM_WAIT_RELEASE;
             }
             break;
 
         case SM_WAIT_RELEASE:
             if (!pressed) {
-                /* §¬§ß§à§á§Ü§Ñ §à§ä§á§å§ë§Ö§ß§Ñ ¡ª §á§à§Õ§Ñ§Ó§Ý§ñ§Ö§Þ §Õ§â§Ö§Ò§Ö§Ù§Ô §ß§Ñ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§Ö */
+                btnState = SM_DEBOUNCE_RELEASE;
+                debounceCounter = DEBOUNCE_TICK_COUNT;
+            } else if (holdTimer > 0U) {
+                holdTimer--;
+            } else {
+                /* §å§Õ§Ö§â§Ø§Ñ§ß§Ú§Ö §á§â§Ö§Ó§í§ã§Ú§Ý§à HOLD_TIME ¡ª §ï§ä§à HOLD */
+                btnEvt = BTN_EVT_HOLD;
+                holdOccurred = 1U;
+                dblCandidate = 0U;
+                btnState = SM_HOLD_DETECTED;
+            }
+            break;
+
+        case SM_HOLD_DETECTED:
+            if (!pressed) {
                 btnState = SM_DEBOUNCE_RELEASE;
                 debounceCounter = DEBOUNCE_TICK_COUNT;
             }
-            /* §¦§ã§Ý§Ú §Ü§ß§à§á§Ü§Ñ §Ó§ã§× §Ö§ë§× §ß§Ñ§Ø§Ñ§ä§Ñ ¡ª §Ø§Õ§×§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ */
             break;
 
         case SM_DEBOUNCE_RELEASE:
             if (pressed) {
-                /* §³§ß§à§Ó§Ñ §ß§Ñ§Ø§Ñ§Ý§Ú ¡ª §Ó§à§Ù§Þ§à§Ø§ß§à, §Õ§Ó§à§Û§ß§à§Û §Ü§Ý§Ú§Ü */
+                /* §Ü§à§â§à§ä§Ü§à§Ö §á§à§Ó§ä§à§â§ß§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö ¡ª §Ü§Ñ§ß§Õ§Ú§Õ§Ñ§ä §Ó §Õ§Ó§à§Û§ß§à§Û §Ü§Ý§Ú§Ü */
+                dblCandidate = (doubleClickTimer > 0U) ? 1U : 0U;
                 btnState = SM_DEBOUNCE_PRESS;
                 debounceCounter = DEBOUNCE_TICK_COUNT;
-                /* §³§Ò§â§à§ã §ä§Ñ§Û§Þ§Ö§â§Ñ §Ó§ä§à§â§à§Ô§à §Ü§Ý§Ú§Ü§Ñ, §ä.§Ü. §ï§ä§à §å§Ø§Ö §ß§à§Ó§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö */
-                doubleClickTimer = 0;
+            } else if (debounceCounter > 0U) {
+                debounceCounter--;
+            } else if (holdOccurred) {
+                /* §á§à§ã§Ý§Ö HOLD §Ý§Ú§ê§î §Õ§à§Ø§Õ§Ñ§ä§î§ã§ñ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ú §Ø§Õ§Ñ§ä§î §ß§à§Ó§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ */
+                holdOccurred = 0U;
+                btnState = SM_WAIT_PRESS;
+            } else if (dblCandidate) {
+                /* §Ó§ä§à§â§à§Û §Ü§Ý§Ú§Ü §á§â§Ú§ê§×§Ý §Ó §à§Ü§ß§à ¡ª DOUBLE */
+                btnEvt = BTN_EVT_DOUBLE;
+                doubleClickTimer = 0U;
+                dblCandidate = 0U;
+                btnState = SM_WAIT_PRESS;
             } else {
-                if (debounceCounter > 0) {
-                    debounceCounter--;
-                } else {
-                    /* §¬§ß§à§á§Ü§Ñ §ä§à§é§ß§à §à§ä§á§å§ë§Ö§ß§Ñ ¡ª §â§Ö§Ô§Ú§ã§ä§â§Ú§â§å§Ö§Þ §à§Õ§Ú§ß§à§é§ß§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö */
-                    if (btnEvt == BTN_EVT_NONE) {
-                        btnEvt = BTN_EVT_SINGLE;
-                    }
-                    /* §©§Ñ§á§å§ã§Ü§Ñ§Ö§Þ §ä§Ñ§Û§Þ§Ö§â §à§Ø§Ú§Õ§Ñ§ß§Ú§ñ §Ó§ä§à§â§à§Ô§à §Ü§Ý§Ú§Ü§Ñ */
-                    doubleClickTimer = DOUBLE_CLICK_TIMEOUT_MS;
-                    btnState = SM_WAIT_SECOND_PRESS;
-                }
+                /* §å§ã§ä§à§Û§é§Ú§Ó§à§Ö §à§ä§á§å§ã§Ü§Ñ§ß§Ú§Ö ¡ª CLICK, §à§Ü§ß§à §ß§Ñ §Õ§Ó§à§Û§ß§à§Û §Ü§Ý§Ú§Ü §à§ä§Ü§â§í§ä§à */
+                btnEvt = BTN_EVT_CLICK;
+                doubleClickTimer = DOUBLE_CLICK_TIMEOUT_MS;
+                btnState = SM_WAIT_SECOND_PRESS;
             }
             break;
 
         case SM_WAIT_SECOND_PRESS:
-            /* §¨§Õ§×§Þ §Ó§ä§à§â§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö §Ó §ä§Ö§é§Ö§ß§Ú§Ö DOUBLE_CLICK_TIMEOUT_MS */
-            if (doubleClickTimer > 0) {
+            if (pressed) {
+                if (doubleClickTimer > 0U) {
+                    dblCandidate = 1U;
+                    btnState = SM_DEBOUNCE_PRESS;
+                    debounceCounter = DEBOUNCE_TICK_COUNT;
+                } else {
+                    /* §à§Ü§ß§à §Ú§ã§ä§Ö§Ü§Ý§à ¡ª §ï§ä§à §å§Ø§Ö §à§Ò§í§é§ß§à§Ö §ß§à§Ó§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö */
+                    btnState = SM_WAIT_PRESS;
+                }
+            } else if (doubleClickTimer > 0U) {
                 doubleClickTimer--;
             } else {
-                /* §´§Ñ§Û§Þ§Ñ§å§ä §Ú§ã§ä§×§Ü ¡ª §ã§é§Ú§ä§Ñ§Ö§Þ §à§Õ§Ú§ß§à§é§ß§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö §à§Ü§à§ß§é§Ñ§ä§Ö§Ý§î§ß§í§Þ */
-                btnEvt = BTN_EVT_NONE; /* §å§Ø§Ö §Ò§í§Ý§à §å§ã§ä§Ñ§ß§à§Ó§Ý§Ö§ß§à §Ü§Ñ§Ü SINGLE, §ß§à §Þ§à§Ø§ß§à §ã§Ò§â§à§ã§Ú§ä§î, §Ö§ã§Ý§Ú §ß§å§Ø§ß§à */
+                /* CLICK §ß§Ö §ã§ä§Ú§â§Ñ§Ö§Þ ¡ª §Ö§Ô§à §Õ§à§Ý§Ø§Ö§ß §Ù§Ñ§Ò§â§Ñ§ä§î §à§ã§ß§à§Ó§ß§à§Û §è§Ú§Ü§Ý */
                 btnState = SM_WAIT_PRESS;
-            }
-
-            if (pressed && (doubleClickTimer > 0)) {
-                /* §£§ä§à§â§à§Ö §ß§Ñ§Ø§Ñ§ä§Ú§Ö §á§â§Ú§ê§Ý§à §Ó§à§Ó§â§Ö§Þ§ñ ¡ª §Õ§Ó§à§Û§ß§à§Û §Ü§Ý§Ú§Ü */
-                btnEvt = BTN_EVT_DOUBLE;
-                btnState = SM_WAIT_PRESS;
-                doubleClickTimer = 0;
-                return; /* §á§â§Ö§â§í§Ó§Ñ§Ö§Þ, §é§ä§à§Ò§í §ß§Ö §à§Ò§â§Ñ§Ò§à§ä§Ñ§ä§î §Ý§Ú§ê§ß§Ö§Ö */
             }
             break;
     }
 }
 
-void Button_SetAction(TBTNACTION action) {
-    btnAct = action;
+void Button_Enable(void) {
+    btnEnabled = 0U;
+
+    /* §ã§Ò§â§à§ã §Þ§Ñ§ê§Ú§ß§í §Ú §ã§à§Ò§í§ä§Ú§Û */
     btnEvt = BTN_EVT_NONE;
     btnState = SM_WAIT_PRESS;
-    debounceCounter = 0;
-    doubleClickTimer = 0;
+    debounceCounter = 0U;
+    doubleClickTimer = 0U;
+    holdTimer = 0U;
+    holdOccurred = 0U;
+    dblCandidate = 0U;
+
+    /* §Ø§Õ§×§Þ, §á§à§Ü§Ñ §Ü§ß§à§á§Ü§Ñ §å§ã§ä§à§Û§é§Ú§Ó§à §à§ä§á§å§ë§Ö§ß§Ñ: DEBOUNCE_TICK_COUNT §Þ§ã §á§à§Õ§â§ñ§Õ.
+       §°§á§â§à§ã §ß§Ñ§á§â§ñ§Þ§å§ð §é§Ö§â§Ö§Ù GPIO, BusyDelay §ß§Ö §Ù§Ñ§Ó§Ú§ã§Ú§ä §à§ä SysTick. */
+    uint32_t stable = 0U;
+    while (stable < DEBOUNCE_TICK_COUNT) {
+        if (Button_IsPressed()) {
+            stable = 0U;
+        } else {
+            stable++;
+        }
+        BusyDelayMs(1U);
+    }
+
+    btnEnabled = 1U;
+}
+
+void Button_Disable(void) {
+    btnEnabled = 0U;
 }
 
 TBTNEVT Button_GetEvt(void) {
     TBTNEVT evt = btnEvt;
     if (evt != BTN_EVT_NONE) {
-        btnEvt = BTN_EVT_NONE;  /* §ã§Ò§â§à§ã §ã§à§Ò§í§ä§Ú§ñ */
+        btnEvt = BTN_EVT_NONE;
     }
     return evt;
 }
