@@ -14,10 +14,12 @@
 #include "SysTick.h"
 #include "lpf.h"
 #include "io_conf.h"
+#include "user_flash.h"
+
 
 
 // §ß§Ö §Ó§í§Ü§Ý§ð§é§Ñ§ä§î SWD §à§ä§Ý§Ñ§Õ§é§Ú§Ü §Ó §â§Ö§Ø§Ú§Þ§Ö §ã§ß§Ñ!!!
-#define ENABLE_DEBUG_IN_LOWPOWER_MODE
+//#define ENABLE_DEBUG_IN_LOWPOWER_MODE
 
 /* -----------------------------------------------------------------------------
  * §¬§à§ß§ã§ä§Ñ§ß§ä§í
@@ -30,7 +32,7 @@
 
 #define DISP_UPDATE_PERIOD_MS      500U
 #define TYP_IDLE_VAC_VALUE      2048U
-#define TYP_MAX_VAC_VALUE        920U
+#define TYP_MAX_VAC_VALUE        920
 
 /* -----------------------------------------------------------------------------
  * §±§Ö§â§Ö§é§Ú§ã§Ý§Ö§ß§Ú§ñ §Ú §ã§ä§â§å§Ü§ä§å§â§í
@@ -69,7 +71,7 @@ static uint16_t p_sensor_Filtered = 0U;
 static int16_t  p_derivative = INT16_MAX;
 static uint8_t  vac_percent = 0U;
 static uint8_t  dispValue = 0U;
-
+static int8_t maxVacCalibValue = 0;
 
 /* -----------------------------------------------------------------------------
  * §±§â§à§ä§à§ä§Ú§á§í
@@ -82,6 +84,8 @@ static void Vac_Release(void);
 static void Delay_ms(uint32_t ms);
 static void Standby(void);  /* §°§Ò§ì§ñ§Ó§Ý§Ö§ß§Ú§Ö §æ§å§ß§Ü§è§Ú§Ú §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §ã§à§ß */
 static void Task500(void);  /* §Ü§Ñ§Ø§Õ§í§Ö 500 §Þ§ã §Ó§í§á§à§Ý§ß§ñ§Ö§Þ */
+static void SaveState(void);
+static int8_t Clamp8(int16_t v);
 
 /* -----------------------------------------------------------------------------
  * main
@@ -96,14 +100,40 @@ int main(void) {
     timers.dispUpdate = DISP_UPDATE_PERIOD_MS;
     timers.task_500ms = 0U;
 
-    Init_Vac_Values(TYP_IDLE_VAC_VALUE, TYP_MAX_VAC_VALUE);
     
+    
+    uint8_t st;
+    uint8_t resumeSleep = 0;
+    if (Flash_Init() && Flash_Load(&st, &maxVacCalibValue)) {
+        if (st == FL_ST_SLEEP) {
+            resumeSleep = 1;
+        } 
+        else if (st == FL_ST_TRACK) {
+            opMode = MODE_TRACK;
+        }
+        /* FL_ST_IDLE ¡ú opMode §å§Ø§Ö MODE_IDLE */
+
+        /* §Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ú§â§å§Ö§Þ §ã §ã§à§ç§â§Ñ§ß§Ö§ß§ß§à§Û §Ü§Ñ§Ý§Ú§Ò§â§à§Ó§Ü§à§Û */
+        uint16_t maxVacValue = TYP_MAX_VAC_VALUE + maxVacCalibValue;
+        Init_Vac_Values(TYP_IDLE_VAC_VALUE, maxVacValue);
+    }
+    else {
+        // §Ù§Ñ§Ô§â§å§Ø§Ñ§Ö§Þ §ä§Ú§á§à§Ó§í§Ö §Ù§ß§Ñ§é§Ö§ß§Ú§ñ
+        Init_Vac_Values(TYP_IDLE_VAC_VALUE, TYP_MAX_VAC_VALUE);
+    }
+
+
+
     Init();
 
-    GPIO_SetBits(PIN_EN);           /* §£§Ü§Ý §á§Ú§ä§Ñ§ß§Ú§Ö §ã§ç§Ö§Þ§í */
-    Delay_ms(200U);                 /* §á§Ñ§å§Ù§Ñ §ß§Ñ §ã§ä§Ñ§Ò§Ú§Ý§Ú§Ù§Ñ§è§Ú§ð */
-    Button_Enable();                /* §ã§Ñ§Þ §Õ§à§Ø§Õ§×§ä§ã§ñ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú */
-
+    if (resumeSleep) {
+        Standby();      /* §ã§à§ß §Ù§Õ§Ö§ã§î; §á§à§ã§Ý§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ ¡ª §ã§â§Ñ§Ù§å §Ó §è§Ú§Ü§Ý, PIN_EN §Ó§í§Ü§Ý§ð§é§Ö§ß */
+    } 
+    else {
+        GPIO_SetBits(PIN_EN);
+        Delay_ms(200U);
+        Button_Enable();
+    }
 
     while (1) {
         vac_percent = Calc_Vac_percent(p_sensor_Filtered);
@@ -112,19 +142,13 @@ int main(void) {
             timers.flag_500ms = 0;
         }
 
-
+        SaveState();
 
         switch (opMode) {
             case MODE_IDLE: {
-                
-
-
                 /* §±§à§Ý§å§é§Ñ§Ö§Þ §ã§à§Ò§í§ä§Ú§Ö §Ü§ß§à§á§Ü§Ú (§ä§Ú§á TBTNEVT §à§á§â§Ö§Õ§Ö§Ý§×§ß §Ó button.h) */
                 TBTNEVT btnEvt = (TBTNEVT)Button_GetEvt();
-// §ä§Ö§ã§ä HOLD
-if (btnEvt == BTN_EVT_HOLD) {
-    dispValue = 25;
-}
+
                 /* §¦§ã§Ý§Ú §Ö§ã§ä§î §­§À§¢§°§¦ §ã§à§Ò§í§ä§Ú§Ö §à§ä §Ü§ß§à§á§Ü§Ú ¡ª §ã§Ò§â§Ñ§ã§í§Ó§Ñ§Ö§Þ §ä§Ñ§Û§Þ§Ö§â §ã§ß§Ñ */
                 if (btnEvt != BTN_EVT_NONE) {
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
@@ -138,12 +162,10 @@ if (btnEvt == BTN_EVT_HOLD) {
                     break;
                 }
 
-                /* §­§à§Ô§Ú§Ü§Ñ §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §ã§à§ß §á§à §ä§Ñ§Û§Þ§Ö§â§å */
-                if (timers.toSleep == 0U) {
+                /* §­§à§Ô§Ú§Ü§Ñ §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §ã§à§ß §á§à §ä§Ñ§Û§Þ§Ö§â§å  §Ý§Ú§Ò§à §á§à §å§Õ§Ö§â§Ø§Ñ§ß§Ú§ð §Ü§ß§à§á§Ü§Ú */
+                if ((timers.toSleep == 0U) || 
+                    (btnEvt == BTN_EVT_HOLD)) {
                     Standby();
-                    /* §±§à§ã§Ý§Ö Standby §®§¬ §å§ç§à§Õ§Ú§ä §Ó §Ô§Ý§å§Ò§à§Ü§Ú§Û §ã§à§ß, §ß§à §Ö§ã§Ý§Ú §á§â§à§Ò§å§Õ§Ú§ä§ã§ñ,
-                       §ä§à §ß§å§Ø§ß§à §Ò§å§Õ§Ö§ä §Ü§à§â§â§Ö§Ü§ä§ß§à §Ú§ß§Ú§è§Ú§Ñ§Ý§Ú§Ù§Ú§â§à§Ó§Ñ§ä§î §ã§à§ã§ä§à§ñ§ß§Ú§Ö §Ù§Ñ§ß§à§Ó§à.
-                       §¥§Ý§ñ §á§â§à§ã§ä§à§ä§í §ã§é§Ú§ä§Ñ§Ö§Þ, §é§ä§à Standby() §Õ§Ö§Ý§Ñ§Ö§ä §Ó§ã§× §ß§Ö§à§Ò§ç§à§Õ§Ú§Þ§à§Ö. */
                     break; 
                 }
                 break;
@@ -164,10 +186,11 @@ if (btnEvt == BTN_EVT_HOLD) {
 
                 if ((p_sensor_Filtered < vac_values.thres60) &&
                     (p_derivative < P_DERIVATIVE_LOW_THRESHOLD)) {
-                    /* §°§ä§Ü§Ñ§é§Ü§Ñ §Ù§Ñ§Ó§Ö§â§ê§Ö§ß§Ñ ¡ª §á§Ö§â§Ö§ç§à§Õ§Ú§Þ §Ó HOLD */
+                    /* §°§ä§Ü§Ñ§é§Ü§Ñ §Ù§Ñ§Ó§Ö§â§ê§Ö§ß§Ñ ¡ª §á§Ö§â§Ö§ç§à§Õ§Ú§Þ §Ó TRACK */
                     Init_Vac_Values(TYP_IDLE_VAC_VALUE, p_sensor_Filtered);
+                    maxVacCalibValue = Clamp8((int16_t)p_sensor_Filtered - TYP_MAX_VAC_VALUE);
                     Vac_Stop();
-                    opMode = MODE_HOLD;
+                    opMode = MODE_TRACK;
                     break;
                 }
                 break;
@@ -362,6 +385,13 @@ static uint8_t Calc_Vac_percent(uint16_t value) {
 }
 
 
+static int8_t Clamp8(int16_t v) {
+    if (v > 127)  return 127;
+    if (v < -128) return -128;
+    return (int8_t)v;
+}
+
+
 static void Task500(void) {
     // §ã§é§Ú§ä§Ñ§Ö§Þ §á§â§à§Ú§Ù§Ó§à§Õ§ß§å§ð §Õ§Ñ§Ó§Ý§Ö§ß§Ú§ñ dP/dt, §à§ß§Ñ §ß§å§Ø§ß§Ñ §Ó §â§Ö§Ø§Ú§Þ§Ö PUMP!
     static uint32_t p_prev = 0;
@@ -384,10 +414,13 @@ static void Task500(void) {
 
 
 /* -----------------------------------------------------------------------------
- * §¶§å§ß§Ü§è§Ú§ñ §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §â§Ö§Ø§Ú§Þ §ã§ß§Ñ (§Õ§à§Ý§Ø§ß§Ñ §Ò§í§ä§î §â§Ö§Ñ§Ý§Ú§Ù§à§Ó§Ñ§ß§Ñ §Ó §à§ä§Õ§Ö§Ý§î§ß§à§Þ §æ§Ñ§Û§Ý§Ö 
- * §Ú§Ý§Ú §Ù§Õ§Ö§ã§î, §Ö§ã§Ý§Ú §Ý§à§Ô§Ú§Ü§Ñ §á§â§à§ã§ä§Ñ§ñ)
+ * §¶§å§ß§Ü§è§Ú§ñ §á§Ö§â§Ö§ç§à§Õ§Ñ §Ó §â§Ö§Ø§Ú§Þ §ã§ß§Ñ 
  * ---------------------------------------------------------------------------*/
 void Standby(void) {
+
+    Flash_Save(FL_ST_SLEEP, maxVacCalibValue);   /* §á§à§Þ§Ö§é§Ñ§Ö§Þ ?§ã§á§Ú§Þ? §Õ§à §à§ä§Ü§Ý§ð§é§Ö§ß§Ú§ñ §Ó§ã§Ö§Ô§à */
+
+    Button_Disable();
     // §°§ã§ä§Ñ§ß§Ñ§Ó§Ý§Ú§Ó§Ñ§Ö§Þ SysTick, §é§ä§à§Ò§í §á§à§Ô§Ñ§ã§Ú§ä§î §Õ§Ú§ã§á§Ý§Ö§Û
     NVIC_DisableIRQ(SysTick_IRQn);
     SysTick->CTLR &= ~STK_CTLR_STE;
@@ -414,6 +447,8 @@ void Standby(void) {
     // §¬§à§ß§æ§Ú§Ô§å§â§Ú§â§å§Ö§Þ §ß§Ñ GPIOD
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource0);
 
+    // §ß§Ñ §Ó§ã§ñ§Ü§Ú§Û §à§é§Ú§ë§Ñ§Ö§Þ §ã§ä§Ñ§â§à§Ö §ã§à§Ò§í§ä§Ú§Ö
+    EXTI_ClearITPendingBit(EXTI_Line0);
     // §µ§ã§í§á§Ý§ñ§Ö§Þ
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
 
@@ -431,6 +466,22 @@ void Standby(void) {
     /* §±§à§ã§Ý§Ö §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§ñ: */
     Init_SysTick();
     opMode = MODE_WAKEUP;
-    /* §Ø§Õ§Ö§Þ §à§ä§á§å§ã§Ü§Ñ§ß§Ú§ñ §Ü§ß§à§á§Ü§Ú §à§ä §Õ§Ý§Ú§ä§Ö§Ý§î§ß§à§Ô§à §ß§Ñ§Ø§Ñ§ä§Ú§ñ §á§â§Ú §á§â§à§Ò§å§Ø§Õ§Ö§ß§Ú§Ú */
-    //            Button_Enable();
+
+}
+
+
+static void SaveState(void) {
+    switch (opMode) {
+        case MODE_WAKEUP:
+            break;       /* §ã§à§ß §Ö§ë§× §ß§Ö §á§à§Õ§ä§Ó§Ö§â§Ø§Õ§×§ß ¡ª §ß§Ö §á§Ú§ê§Ö§Þ */
+
+        case MODE_TRACK: /* Fall through */
+        case MODE_HOLD:  
+            Flash_Save(FL_ST_TRACK, maxVacCalibValue);
+            break;
+
+        default:
+            Flash_Save(FL_ST_IDLE,  maxVacCalibValue);
+            break;      /* PUMP §Ú §á§â§à§é§Ö§Ö ¡ú IDLE */
+    }
 }
