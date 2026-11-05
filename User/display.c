@@ -2,7 +2,7 @@
 
 
 
-/* ���ڧ�� ��֧ԧާ֧ߧ��� �ߧ� GPIOC[6:0] */
+/* Биты сегментов на GPIOC[6:0] */
 #define SEG_A   0x20    /* PC5 */
 #define SEG_B   0x40    /* PC6 */
 #define SEG_C   0x8     /* PC3 */
@@ -28,26 +28,26 @@ static const uint8_t decodeTable[11] = {
 
 
 void Display_Refresh(uint8_t value) {
-    static uint8_t dig = 0;     // ���ѧ٧� �ڧߧէڧܧѧ�ڧ� 0 1
-    dig ^= 1;   // ���֧�֧ܧݧ��ѧ֧� ��ѧ٧�
-    // �ԧѧ�ڧ� �ӧ��
+    static uint8_t dig = 0;     // Фаза индикации 0 1
+    dig ^= 1;   // Переключаем фазу
+    // гасим все
     GPIO_ResetBits(GPIOC, SEG_ALL);
     GPIO_ResetBits(PIN_DISP_0);
     GPIO_ResetBits(PIN_DISP_1);
 
     if(value > 99) {
-        // ����ҧ�ѧاѧ֧� -- 
+        // отображаем -- 
         GPIO_SetBits(GPIOC, decodeTable[10]);
     }
 
     else {
-        uint8_t dec; // ��ڧ���
+        uint8_t dec; // цифра
         if(dig) {
-            // ���ѧ��ڧ� ��ѧ٧���
+            // старший разряд
             dec = value / 10;
         }
         else {
-            // �ާݧѧէ�ڧ� ��ѧ٧���
+            // младший разряд
             dec = value % 10;
         }
         GPIO_SetBits(GPIOC, decodeTable[dec]);

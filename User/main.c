@@ -1,10 +1,10 @@
 /********************************** (C) COPYRIGHT *******************************
  * File Name          : main.c
- * Author             : WCH (ß—ß’ß—ß·ß‰ß⁄ß‚ß‡ß”ß—ßﬂß‡: TBTNEVT ß⁄ßŸ button.h, ß‰ß—ß€ßﬁß÷ß‚ ß„ßﬂß— ß” IDLE)
+ * Author             : WCH (–∞–¥–∞–ø—Ç–∏—Ä–æ–≤–∞–Ω–æ: TBTNEVT –∏–∑ button.h, —Ç–∞–π–º–µ—Ä —Å–Ω–∞ –≤ IDLE)
  * Version            : V2.0.0
- * Description        : ß£ß„ßÒ ß›ß‡ß‘ß⁄ß‹ß— ß”ßﬂßÂß‰ß‚ß⁄ switch(opMode).
- *                      ß™ß„ß·ß‡ß›ßÓßŸßÂß÷ß‰ß„ßÒ TBTNEVT ß⁄ßŸ button.h.
- *                      ß£ IDLE ß‡ß‰ß„ß›ß÷ßÿß⁄ß”ß—ß÷ß‰ß„ßÒ ß‰ß—ß€ßﬁß÷ß‚ ß„ßﬂß— -> Standby().
+ * Description        : –í—Å—è –ª–æ–≥–∏–∫–∞ –≤–Ω—É—Ç—Ä–∏ switch(opMode).
+ *                      –ò—Å–ø–æ–ª—å–∑—É–µ—Ç—Å—è TBTNEVT –∏–∑ button.h.
+ *                      –í IDLE –æ—Ç—Å–ª–µ–∂–∏–≤–∞–µ—Ç—Å—è —Ç–∞–π–º–µ—Ä —Å–Ω–∞ -> Standby().
  *******************************************************************************/
 
 
@@ -18,24 +18,24 @@
 
 
 
-// ßﬂß÷ ß”ßÌß‹ß›ßßÈß—ß‰ßÓ SWD ß‡ß‰ß›ß—ß’ßÈß⁄ß‹ ß” ß‚ß÷ßÿß⁄ßﬁß÷ ß„ßﬂß—!!!
+// –Ω–µ –≤—ã–∫–ª—é—á–∞—Ç—å SWD –æ—Ç–ª–∞–¥—á–∏–∫ –≤ —Ä–µ–∂–∏–º–µ —Å–Ω–∞!!!
 //#define ENABLE_DEBUG_IN_LOWPOWER_MODE
 
 /* -----------------------------------------------------------------------------
- * ß¨ß‡ßﬂß„ß‰ß—ßﬂß‰ßÌ
+ * –ö–æ–Ω—Å—Ç–∞–Ω—Ç—ã
  * ---------------------------------------------------------------------------*/
 #define MOTOR_PWM_MIN           84U
 #define MOTOR_PWM_MAX           168U
 #define MOTOR_PROTECT_TIME_MS   8000U
 #define P_DERIVATIVE_LOW_THRESHOLD  5
-#define IDLE_SLEEP_TIMEOUT_MS       10000U  /* ß¥ß—ß€ßﬁß—ßÂß‰ ß’ß‡ ß·ß÷ß‚ß÷ßÁß‡ß’ß— ß” Standby */
+#define IDLE_SLEEP_TIMEOUT_MS       10000U  /* –¢–∞–π–º–∞—É—Ç –¥–æ –ø–µ—Ä–µ—Ö–æ–¥–∞ –≤ Standby */
 
 #define DISP_UPDATE_PERIOD_MS      500U
 #define TYP_IDLE_VAC_VALUE      2048U
 #define TYP_MAX_VAC_VALUE        920
 
 /* -----------------------------------------------------------------------------
- * ß±ß÷ß‚ß÷ßÈß⁄ß„ß›ß÷ßﬂß⁄ßÒ ß⁄ ß„ß‰ß‚ßÂß‹ß‰ßÂß‚ßÌ
+ * –ü–µ—Ä–µ—á–∏—Å–ª–µ–Ω–∏—è –∏ —Å—Ç—Ä—É–∫—Ç—É—Ä—ã
  * ---------------------------------------------------------------------------*/
 typedef enum {
     MODE_IDLE,
@@ -47,17 +47,17 @@ typedef enum {
 
 static OpMode_t opMode = MODE_IDLE;
 
-/* ß¥ß—ß€ßﬁß÷ß‚ßÌ: ßÁß‚ß—ßﬂß⁄ßﬁ ?ß„ß‹ß‡ß›ßÓß‹ß‡ ß‡ß„ß‰ß—ß›ß‡ß„ßÓ? ß” ßﬁß„ */
+/* –¢–∞–π–º–µ—Ä—ã: —Ö—Ä–∞–Ω–∏–º ?—Å–∫–æ–ª—å–∫–æ –æ—Å—Ç–∞–ª–æ—Å—å? –≤ –º—Å */
 static struct {
-    uint32_t toSleep;           /* ß’ß‡ ß„ßﬂß— (ß‰ß‡ß›ßÓß‹ß‡ ß’ß›ßÒ IDLE) */
-    uint32_t motorProtect;      /* ßŸß—ßÎß⁄ß‰ß— ßﬁß‡ß‰ß‡ß‚ß— */
-    uint32_t dispUpdate;        /* ß‰ß—ß€ßﬁß÷ß‚ ß‡ß“ßﬂß‡ß”ß›ß÷ßﬂß⁄ßÒ ß’ß⁄ß„ß·ß›ß÷ßÒ */
-    uint32_t delay;             /* ß’ß›ßÒ ß“ß›ß‡ß‹ß⁄ß‚ßÂßßÎß÷ß€ ßŸß—ß’ß÷ß‚ßÿß‹ß⁄ */
-    uint32_t task_500ms;        /* ß’ß›ßÒ ßŸß—ß’ß—ßÈß⁄ ß‹ß—ßÿß’ßÌß÷ 500 ßﬁß„ */
+    uint32_t toSleep;           /* –¥–æ —Å–Ω–∞ (—Ç–æ–ª—å–∫–æ –¥–ª—è IDLE) */
+    uint32_t motorProtect;      /* –∑–∞—â–∏—Ç–∞ –º–æ—Ç–æ—Ä–∞ */
+    uint32_t dispUpdate;        /* —Ç–∞–π–º–µ—Ä –æ–±–Ω–æ–≤–ª–µ–Ω–∏—è –¥–∏—Å–ø–ª–µ—è */
+    uint32_t delay;             /* –¥–ª—è –±–ª–æ–∫–∏—Ä—É—é—â–µ–π –∑–∞–¥–µ—Ä–∂–∫–∏ */
+    uint32_t task_500ms;        /* –¥–ª—è –∑–∞–¥–∞—á–∏ –∫–∞–∂–¥—ã–µ 500 –º—Å */
     uint32_t flag_500ms;
 } timers;
 
-/* ß±ß‡ß‚ß‡ß‘ß⁄ ß”ß—ß‹ßÂßÂßﬁß— */
+/* –ü–æ—Ä–æ–≥–∏ –≤–∞–∫—É—É–º–∞ */
 static struct {
     uint16_t in_idle;
     uint16_t in_max;
@@ -65,7 +65,7 @@ static struct {
     uint16_t thres80;
 } vac_values;
 
-/* ß§ß›ß‡ß“ß—ß›ßÓßﬂßÌß÷ ß·ß÷ß‚ß÷ßﬁß÷ßﬂßﬂßÌß÷ ß„ß‡ß„ß‰ß‡ßÒßﬂß⁄ßÒ */
+/* –ì–ª–æ–±–∞–ª—å–Ω—ã–µ –ø–µ—Ä–µ–º–µ–Ω–Ω—ã–µ —Å–æ—Å—Ç–æ—è–Ω–∏—è */
 static uint16_t motorPWM = 0U;
 static uint16_t p_sensor_Filtered = 0U;
 static int16_t  p_derivative = INT16_MAX;
@@ -74,7 +74,7 @@ static uint8_t  dispValue = 0U;
 static int8_t maxVacCalibValue = 0;
 
 /* -----------------------------------------------------------------------------
- * ß±ß‚ß‡ß‰ß‡ß‰ß⁄ß·ßÌ
+ * –ü—Ä–æ—Ç–æ—Ç–∏–ø—ã
  * ---------------------------------------------------------------------------*/
 static void Init_Vac_Values(uint16_t idle, uint16_t max);
 static uint8_t Calc_Vac_percent(uint16_t value);
@@ -82,8 +82,8 @@ static void Vac_Start(void);
 static void Vac_Stop(void);
 static void Vac_Release(void);
 static void Delay_ms(uint32_t ms);
-static void Standby(void);  /* ß∞ß“ßÏßÒß”ß›ß÷ßﬂß⁄ß÷ ßÊßÂßﬂß‹ßËß⁄ß⁄ ß·ß÷ß‚ß÷ßÁß‡ß’ß— ß” ß„ß‡ßﬂ */
-static void Task500(void);  /* ß‹ß—ßÿß’ßÌß÷ 500 ßﬁß„ ß”ßÌß·ß‡ß›ßﬂßÒß÷ßﬁ */
+static void Standby(void);  /* –û–±—ä—è–≤–ª–µ–Ω–∏–µ —Ñ—É–Ω–∫—Ü–∏–∏ –ø–µ—Ä–µ—Ö–æ–¥–∞ –≤ —Å–æ–Ω */
+static void Task500(void);  /* –∫–∞–∂–¥—ã–µ 500 –º—Å –≤—ã–ø–æ–ª–Ω—è–µ–º */
 static void SaveState(void);
 static int8_t Clamp8(int16_t v);
 
@@ -94,8 +94,8 @@ int main(void) {
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
     SystemCoreClockUpdate();
 
-    /* ß™ßﬂß⁄ßËß⁄ß—ß›ß⁄ßŸß—ßËß⁄ßÒ ß‰ß—ß€ßﬁß÷ß‚ß‡ß” */
-    timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;            /* ß£ ßﬂß—ßÈß—ß›ß÷ ßﬂß÷ ß„ß·ß⁄ßﬁ */
+    /* –ò–Ω–∏—Ü–∏–∞–ª–∏–∑–∞—Ü–∏—è —Ç–∞–π–º–µ—Ä–æ–≤ */
+    timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;            /* –í –Ω–∞—á–∞–ª–µ –Ω–µ —Å–ø–∏–º */
     timers.motorProtect = 0U;
     timers.dispUpdate = DISP_UPDATE_PERIOD_MS;
     timers.task_500ms = 0U;
@@ -111,14 +111,14 @@ int main(void) {
         else if (st == FL_ST_TRACK) {
             opMode = MODE_TRACK;
         }
-        /* FL_ST_IDLE °˙ opMode ßÂßÿß÷ MODE_IDLE */
+        /* FL_ST_IDLE ‚Üí opMode —É–∂–µ MODE_IDLE */
 
-        /* ß⁄ßﬂß⁄ßËß⁄ß—ß›ß⁄ßŸß⁄ß‚ßÂß÷ßﬁ ß„ ß„ß‡ßÁß‚ß—ßﬂß÷ßﬂßﬂß‡ß€ ß‹ß—ß›ß⁄ß“ß‚ß‡ß”ß‹ß‡ß€ */
+        /* –∏–Ω–∏—Ü–∏–∞–ª–∏–∑–∏—Ä—É–µ–º —Å —Å–æ—Ö—Ä–∞–Ω–µ–Ω–Ω–æ–π –∫–∞–ª–∏–±—Ä–æ–≤–∫–æ–π */
         uint16_t maxVacValue = TYP_MAX_VAC_VALUE + maxVacCalibValue;
         Init_Vac_Values(TYP_IDLE_VAC_VALUE, maxVacValue);
     }
     else {
-        // ßŸß—ß‘ß‚ßÂßÿß—ß÷ßﬁ ß‰ß⁄ß·ß‡ß”ßÌß÷ ßŸßﬂß—ßÈß÷ßﬂß⁄ßÒ
+        // –∑–∞–≥—Ä—É–∂–∞–µ–º —Ç–∏–ø–æ–≤—ã–µ –∑–Ω–∞—á–µ–Ω–∏—è
         Init_Vac_Values(TYP_IDLE_VAC_VALUE, TYP_MAX_VAC_VALUE);
     }
 
@@ -127,7 +127,7 @@ int main(void) {
     Init();
 
     if (resumeSleep) {
-        Standby();      /* ß„ß‡ßﬂ ßŸß’ß÷ß„ßÓ; ß·ß‡ß„ß›ß÷ ß·ß‚ß‡ß“ßÂßÿß’ß÷ßﬂß⁄ßÒ °™ ß„ß‚ß—ßŸßÂ ß” ßËß⁄ß‹ß›, PIN_EN ß”ßÌß‹ß›ßßÈß÷ßﬂ */
+        Standby();      /* —Å–æ–Ω –∑–¥–µ—Å—å; –ø–æ—Å–ª–µ –ø—Ä–æ–±—É–∂–¥–µ–Ω–∏—è ‚Äî —Å—Ä–∞–∑—É –≤ —Ü–∏–∫–ª, PIN_EN –≤—ã–∫–ª—é—á–µ–Ω */
     } 
     else {
         GPIO_SetBits(PIN_EN);
@@ -146,15 +146,15 @@ int main(void) {
 
         switch (opMode) {
             case MODE_IDLE: {
-                /* ß±ß‡ß›ßÂßÈß—ß÷ßﬁ ß„ß‡ß“ßÌß‰ß⁄ß÷ ß‹ßﬂß‡ß·ß‹ß⁄ (ß‰ß⁄ß· TBTNEVT ß‡ß·ß‚ß÷ß’ß÷ß›ß◊ßﬂ ß” button.h) */
+                /* –ü–æ–ª—É—á–∞–µ–º —Å–æ–±—ã—Ç–∏–µ –∫–Ω–æ–ø–∫–∏ (—Ç–∏–ø TBTNEVT –æ–ø—Ä–µ–¥–µ–ª—ë–Ω –≤ button.h) */
                 TBTNEVT btnEvt = (TBTNEVT)Button_GetEvt();
 
-                /* ß¶ß„ß›ß⁄ ß÷ß„ß‰ßÓ ß≠ß¿ß¢ß∞ß¶ ß„ß‡ß“ßÌß‰ß⁄ß÷ ß‡ß‰ ß‹ßﬂß‡ß·ß‹ß⁄ °™ ß„ß“ß‚ß—ß„ßÌß”ß—ß÷ßﬁ ß‰ß—ß€ßﬁß÷ß‚ ß„ßﬂß— */
+                /* –ï—Å–ª–∏ –µ—Å—Ç—å –õ–Æ–ë–û–ï —Å–æ–±—ã—Ç–∏–µ –æ—Ç –∫–Ω–æ–ø–∫–∏ ‚Äî —Å–±—Ä–∞—Å—ã–≤–∞–µ–º —Ç–∞–π–º–µ—Ä —Å–Ω–∞ */
                 if (btnEvt != BTN_EVT_NONE) {
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
                 }
 
-                /* ß∞ß“ß‚ß—ß“ß‡ß‰ß‹ß— ß‡ß’ß⁄ßﬂß‡ßÈßﬂß‡ß‘ß‡ ß‹ß›ß⁄ß‹ß—: ß„ß‰ß—ß‚ß‰ ßﬂß—ß‹ß—ßÈß‹ß⁄ */
+                /* –û–±—Ä–∞–±–æ—Ç–∫–∞ –æ–¥–∏–Ω–æ—á–Ω–æ–≥–æ –∫–ª–∏–∫–∞: —Å—Ç–∞—Ä—Ç –Ω–∞–∫–∞—á–∫–∏ */
                 if (btnEvt == BTN_EVT_CLICK) {
                     opMode = MODE_PUMP;
                     Vac_Start();
@@ -162,7 +162,7 @@ int main(void) {
                     break;
                 }
 
-                /* ß≠ß‡ß‘ß⁄ß‹ß— ß·ß÷ß‚ß÷ßÁß‡ß’ß— ß” ß„ß‡ßﬂ ß·ß‡ ß‰ß—ß€ßﬁß÷ß‚ßÂ  ß›ß⁄ß“ß‡ ß·ß‡ ßÂß’ß÷ß‚ßÿß—ßﬂß⁄ß ß‹ßﬂß‡ß·ß‹ß⁄ */
+                /* –õ–æ–≥–∏–∫–∞ –ø–µ—Ä–µ—Ö–æ–¥–∞ –≤ —Å–æ–Ω –ø–æ —Ç–∞–π–º–µ—Ä—É  –ª–∏–±–æ –ø–æ —É–¥–µ—Ä–∂–∞–Ω–∏—é –∫–Ω–æ–ø–∫–∏ */
                 if ((timers.toSleep == 0U) || 
                     (btnEvt == BTN_EVT_HOLD)) {
                     Standby();
@@ -172,11 +172,11 @@ int main(void) {
             }
 
             case MODE_PUMP: {
-                /* ß¶ß„ß›ß⁄ ß‡ß‰ß‹ß—ßÈß‹ß— ß⁄ß’ß÷ß‰, ß·ß÷ß‚ß÷ßŸß—ß‘ß‚ßÂßÿß—ß÷ßﬁ ß‰ß—ß€ßﬁß÷ß‚ ßŸß—ßÎß⁄ß‰ßÌ */
+                /* –ï—Å–ª–∏ –æ—Ç–∫–∞—á–∫–∞ –∏–¥–µ—Ç, –ø–µ—Ä–µ–∑–∞–≥—Ä—É–∂–∞–µ–º —Ç–∞–π–º–µ—Ä –∑–∞—â–∏—Ç—ã */
                 if (p_derivative > P_DERIVATIVE_LOW_THRESHOLD) {
                     timers.motorProtect = MOTOR_PROTECT_TIME_MS;
                 }
-                /* ß¶ß„ß›ß⁄ ß‰ß—ß€ßﬁß—ßÂß‰ ß·ß‡ ßŸß—ßÎß⁄ß‰ß÷ ß⁄ß›ß⁄ ßﬂß—ßÿß—ß›ß⁄ ß‹ßﬂß‡ß·ß‹ßÂ - ß‡ß„ß‰ß—ßﬂß‡ß”, ß„ß“ß‚ß‡ß„ ß”ß—ß‹ßÂßÂßﬁß—, ß”ßÌßÁß‡ß’ ß” IDLE */
+                /* –ï—Å–ª–∏ —Ç–∞–π–º–∞—É—Ç –ø–æ –∑–∞—â–∏—Ç–µ –∏–ª–∏ –Ω–∞–∂–∞–ª–∏ –∫–Ω–æ–ø–∫—É - –æ—Å—Ç–∞–Ω–æ–≤, —Å–±—Ä–æ—Å –≤–∞–∫—É—É–º–∞, –≤—ã—Ö–æ–¥ –≤ IDLE */
                 if ((timers.motorProtect == 0U) || (Button_GetEvt() == BTN_EVT_CLICK)) {
                     Vac_Stop();
                     opMode = MODE_IDLE;
@@ -186,7 +186,7 @@ int main(void) {
 
                 if ((p_sensor_Filtered < vac_values.thres60) &&
                     (p_derivative < P_DERIVATIVE_LOW_THRESHOLD)) {
-                    /* ß∞ß‰ß‹ß—ßÈß‹ß— ßŸß—ß”ß÷ß‚ßÍß÷ßﬂß— °™ ß·ß÷ß‚ß÷ßÁß‡ß’ß⁄ßﬁ ß” TRACK */
+                    /* –û—Ç–∫–∞—á–∫–∞ –∑–∞–≤–µ—Ä—à–µ–Ω–∞ ‚Äî –ø–µ—Ä–µ—Ö–æ–¥–∏–º –≤ TRACK */
                     Init_Vac_Values(TYP_IDLE_VAC_VALUE, p_sensor_Filtered);
                     maxVacCalibValue = Clamp8((int16_t)p_sensor_Filtered - TYP_MAX_VAC_VALUE);
                     Vac_Stop();
@@ -197,13 +197,13 @@ int main(void) {
             }
 
             case MODE_HOLD: {
-                /* ß£ HOLD: ß„ß›ß÷ß’ß⁄ßﬁ ßŸß— ß·ß‡ß‚ß‡ß‘ß‡ßﬁ °™ ß÷ß„ß›ß⁄ ß’ß—ß”ß›ß÷ßﬂß⁄ß÷ ß’ß‡ß„ß‰ß—ß‰ß‡ßÈßﬂß‡ ß”ßÌß„ß‡ß‹ß‡ß÷, ß⁄ß’ß◊ßﬁ ß” TRACK */
+                /* –í HOLD: —Å–ª–µ–¥–∏–º –∑–∞ –ø–æ—Ä–æ–≥–æ–º ‚Äî –µ—Å–ª–∏ –¥–∞–≤–ª–µ–Ω–∏–µ –¥–æ—Å—Ç–∞—Ç–æ—á–Ω–æ –≤—ã—Å–æ–∫–æ–µ, –∏–¥—ë–º –≤ TRACK */
                 if (p_sensor_Filtered <= vac_values.thres80) {
                     Vac_Stop();
                     opMode = MODE_TRACK;
                     break;
                 }
-                /* ß¥ß—ß€ßﬁß—ßÂß‰ ß·ß‡ ßŸß—ßÎß⁄ß‰ß÷ - ß‡ß„ß‰ß—ßﬂß‡ß”, ß„ß“ß‚ß‡ß„ ß”ß—ß‹ßÂßÂßﬁß—, ß”ßÌßÁß‡ß’ ß” IDLE */
+                /* –¢–∞–π–º–∞—É—Ç –ø–æ –∑–∞—â–∏—Ç–µ - –æ—Å—Ç–∞–Ω–æ–≤, —Å–±—Ä–æ—Å –≤–∞–∫—É—É–º–∞, –≤—ã—Ö–æ–¥ –≤ IDLE */
                 if (timers.motorProtect == 0U) {
                     Vac_Stop();
                     Vac_Release();
@@ -211,14 +211,14 @@ int main(void) {
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
                     break;
                 }
-                /* ß¨ßﬂß‡ß·ß‹ß⁄ ß” HOLD ßﬂß÷ ß‡ß“ß‚ß—ß“ß—ß‰ßÌß”ß—ß÷ßﬁ (ßﬁß‡ßÿßﬂß‡ ß’ß‡ß“ß—ß”ß⁄ß‰ßÓ, ß÷ß„ß›ß⁄ ßﬂßÂßÿßﬂß‡) */
+                /* –ö–Ω–æ–ø–∫–∏ –≤ HOLD –Ω–µ –æ–±—Ä–∞–±–∞—Ç—ã–≤–∞–µ–º (–º–æ–∂–Ω–æ –¥–æ–±–∞–≤–∏—Ç—å, –µ—Å–ª–∏ –Ω—É–∂–Ω–æ) */
                 break;
             }
 
             case MODE_TRACK: {
                 TBTNEVT btnEvt = (TBTNEVT)Button_GetEvt();
 
-                /* ß£ TRACK: ß‡ß’ß⁄ßﬂß‡ßÈßﬂßÌß€ ß⁄ß‘ßﬂß‡ß‚ß⁄ß‚ßÂß÷ßﬁ, ß’ß”ß‡ß€ßﬂß‡ß€ °™ ß„ß“ß‚ß‡ß„ ß”ß—ß‹ßÂßÂßﬁß— */
+                /* –í TRACK: –æ–¥–∏–Ω–æ—á–Ω—ã–π –∏–≥–Ω–æ—Ä–∏—Ä—É–µ–º, –¥–≤–æ–π–Ω–æ–π ‚Äî —Å–±—Ä–æ—Å –≤–∞–∫—É—É–º–∞ */
                 if (btnEvt == BTN_EVT_DOUBLE) {
                     Vac_Release();
                     opMode = MODE_IDLE;
@@ -226,7 +226,7 @@ int main(void) {
                     break;
                 }
 
-                /* ß≠ß‡ß‘ß⁄ß‹ß— ß’ß‡ß‹ß—ßÈß‹ß⁄: ß÷ß„ß›ß⁄ ßÂß·ß—ß›ß‡ ßﬂß⁄ßÿß÷ 60% °™ ß”ß‹ß›ßßÈß—ß÷ßﬁ ßﬁß‡ß‰ß‡ß‚ ß⁄ ß⁄ß’ß◊ßﬁ ß” HOLD */
+                /* –õ–æ–≥–∏–∫–∞ –¥–æ–∫–∞—á–∫–∏: –µ—Å–ª–∏ —É–ø–∞–ª–æ –Ω–∏–∂–µ 60% ‚Äî –≤–∫–ª—é—á–∞–µ–º –º–æ—Ç–æ—Ä –∏ –∏–¥—ë–º –≤ HOLD */
                 if (p_sensor_Filtered > vac_values.thres60) {
                     Vac_Start();
                     timers.motorProtect = MOTOR_PROTECT_TIME_MS;
@@ -237,8 +237,8 @@ int main(void) {
             }
             
             case MODE_WAKEUP:
-                /* ß∞ßÿß⁄ß’ß—ß÷ßﬁ ßÂß’ß÷ß‚ßÿß—ßﬂß⁄ßÒ ß‹ßﬂß‡ß·ß‹ß⁄ 1 ß„ */
-                Delay_ms(50);   // ß·ß—ßÂßŸß— ß·ß‡ß’ß—ß”ß›ß÷ßﬂß⁄ßÒ ß’ß‚ß÷ß“ß÷ßŸß‘ß—
+                /* –û–∂–∏–¥–∞–µ–º —É–¥–µ—Ä–∂–∞–Ω–∏—è –∫–Ω–æ–ø–∫–∏ 1 —Å */
+                Delay_ms(50);   // –ø–∞—É–∑–∞ –ø–æ–¥–∞–≤–ª–µ–Ω–∏—è –¥—Ä–µ–±–µ–∑–≥–∞
                 timers.delay = 950;
                 int btnHold = 1;
                 while(timers.delay) {
@@ -248,13 +248,13 @@ int main(void) {
                     }
                 }
                 if(!btnHold) {
-                    /* ß‹ßﬂß‡ß·ß‹ßÂ ß‡ß‰ß·ßÂß„ß‰ß⁄ß›ß⁄ ß‚ß—ßﬂßÓßÍß÷ 1 ß„, ßŸß—ß„ßÌß·ß—ß÷ßﬁ ß‡ß“ß‚ß—ß‰ßﬂß‡ */
+                    /* –∫–Ω–æ–ø–∫—É –æ—Ç–ø—É—Å—Ç–∏–ª–∏ —Ä–∞–Ω—å—à–µ 1 —Å, –∑–∞—Å—ã–ø–∞–µ–º –æ–±—Ä–∞—Ç–Ω–æ */
                     Standby();
                     break;
                 }
                 else {
-                    Init(); // ß‚ß÷ß⁄ßﬂß⁄ßËß⁄ß—ß›ß⁄ßŸß—ßËß⁄ßÒ ß·ß÷ß‚ß⁄ßÊß÷ß‚ß⁄ß⁄ ß⁄ SysTick
-                    GPIO_SetBits(PIN_EN);   // ß£ß‹ß› ß·ß⁄ß‰ß—ßﬂß⁄ßÒ
+                    Init(); // —Ä–µ–∏–Ω–∏—Ü–∏–∞–ª–∏–∑–∞—Ü–∏—è –ø–µ—Ä–∏—Ñ–µ—Ä–∏–∏ –∏ SysTick
+                    GPIO_SetBits(PIN_EN);   // –í–∫–ª –ø–∏—Ç–∞–Ω–∏—è
                     timers.toSleep = IDLE_SLEEP_TIMEOUT_MS;
                     opMode = MODE_IDLE;
                     Button_Enable();
@@ -268,11 +268,11 @@ int main(void) {
 }
 
 /* -----------------------------------------------------------------------------
- * ß±ß‚ß÷ß‚ßÌß”ß—ßﬂß⁄ßÒ
+ * –ü—Ä–µ—Ä—ã–≤–∞–Ω–∏—è
  * ---------------------------------------------------------------------------*/
 void SysTick_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void SysTick_Handler(void) {
-    /* ß” ß‚ß÷ßÿß⁄ßﬁß÷ ß·ß‚ß‡ß“ßÂßÿß’ß÷ßﬂß⁄ßÒ ß‚ß—ß“ß‡ß‰ß—ß÷ß‰ ß‰ß‡ß›ßÓß‹ß‡ ß‰ß—ß€ßﬁß÷ß‚ ß’ß›ßÒ Delay_ms() */
+    /* –≤ —Ä–µ–∂–∏–º–µ –ø—Ä–æ–±—É–∂–¥–µ–Ω–∏—è —Ä–∞–±–æ—Ç–∞–µ—Ç —Ç–æ–ª—å–∫–æ —Ç–∞–π–º–µ—Ä –¥–ª—è Delay_ms() */
     if(opMode == MODE_WAKEUP) {
         if (timers.delay > 0) {
             timers.delay--;
@@ -281,10 +281,10 @@ void SysTick_Handler(void) {
         return;
     }
 
-    /* ß≥ß‰ß—ß‚ß‰ßÂß÷ßﬁ ß·ß‚ß÷ß‡ß“ß‚ß—ßŸß‡ß”ß—ßﬂß⁄ß÷ */
+    /* –°—Ç–∞—Ä—Ç—É–µ–º –ø—Ä–µ–æ–±—Ä–∞–∑–æ–≤–∞–Ω–∏–µ */
     ADC_SoftwareStartConvCmd(ADC1, ENABLE);
 
-    /* ß±ß›ß—ß”ßﬂßÌß€ ß‚ß—ßŸß‘ß‡ßﬂ ßﬁß‡ß‰ß‡ß‚ß— */
+    /* –ü–ª–∞–≤–Ω—ã–π —Ä–∞–∑–≥–æ–Ω –º–æ—Ç–æ—Ä–∞ */
     if (motorPWM > 0U && motorPWM < MOTOR_PWM_MAX) {
         motorPWM++;
         TIM2->CH4CVR = motorPWM;
@@ -294,22 +294,22 @@ void SysTick_Handler(void) {
 
     Display_Refresh(dispValue);
 
-    /* ß•ß÷ß‹ß‚ß÷ßﬁß÷ßﬂß‰ ß‰ß—ß€ßﬁß÷ß‚ß‡ß” ß‹ß—ßÿß’ßÂß ßﬁß⁄ß›ß›ß⁄ß„ß÷ß‹ßÂßﬂß’ßÂ */
+    /* –î–µ–∫—Ä–µ–º–µ–Ω—Ç —Ç–∞–π–º–µ—Ä–æ–≤ –∫–∞–∂–¥—É—é –º–∏–ª–ª–∏—Å–µ–∫—É–Ω–¥—É */
     if (timers.delay > 0U) timers.delay--;
     if (timers.toSleep > 0U) timers.toSleep--;
     if (timers.motorProtect > 0U) timers.motorProtect--;
     if (timers.dispUpdate > 0U) timers.dispUpdate--;
 
-    /* ß‰ß—ß€ßﬁß÷ß‚ßÌ ßŸß—ß’ß—ßÈ */
+    /* —Ç–∞–π–º–µ—Ä—ã –∑–∞–¥–∞—á */
     if (timers.task_500ms > 0U ) {
         timers.task_500ms--;
     }
     else {
-        timers.flag_500ms = 1;  // ß”ßŸß”ß‡ß’ß⁄ßﬁ ßÊß›ß—ß‘ ßﬂß— ß⁄ß„ß·ß‡ß›ßﬂß÷ßﬂß⁄ß÷
-        timers.task_500ms = 500U;   // ß·ß÷ß‚ß÷ßŸß—ß‘ß‚ßÂßÿß—ß÷ßﬁ ß‰ß—ß€ßﬁß÷ß‚ ßŸß—ß’ß—ßÈß⁄
+        timers.flag_500ms = 1;  // –≤–∑–≤–æ–¥–∏–º —Ñ–ª–∞–≥ –Ω–∞ –∏—Å–ø–æ–ª–Ω–µ–Ω–∏–µ
+        timers.task_500ms = 500U;   // –ø–µ—Ä–µ–∑–∞–≥—Ä—É–∂–∞–µ–º —Ç–∞–π–º–µ—Ä –∑–∞–¥–∞—á–∏
     }
 
-    /* ß∞ß“ßﬂß‡ß”ß›ß÷ßﬂß⁄ß÷ ß‡ß‰ß‡ß“ß‚ß—ßÿß—ß÷ßﬁß‡ß‘ß‡ ßŸßﬂß—ßÈß÷ßﬂß⁄ßÒ ß·ß‡ ß‰ß—ß€ßﬁß÷ß‚ßÂ */
+    /* –û–±–Ω–æ–≤–ª–µ–Ω–∏–µ –æ—Ç–æ–±—Ä–∞–∂–∞–µ–º–æ–≥–æ –∑–Ω–∞—á–µ–Ω–∏—è –ø–æ —Ç–∞–π–º–µ—Ä—É */
     if (timers.dispUpdate == 0U) {
         dispValue = vac_percent;
         timers.dispUpdate = DISP_UPDATE_PERIOD_MS;
@@ -325,7 +325,7 @@ void ADC1_IRQHandler(void) {
 }
 
 /* -----------------------------------------------------------------------------
- * ß£ß„ß·ß‡ßﬁß‡ß‘ß—ß‰ß÷ß›ßÓßﬂßÌß÷ ßÊßÂßﬂß‹ßËß⁄ß⁄
+ * –í—Å–ø–æ–º–æ–≥–∞—Ç–µ–ª—å–Ω—ã–µ —Ñ—É–Ω–∫—Ü–∏–∏
  * ---------------------------------------------------------------------------*/
 void Delay_ms(uint32_t ms) {
     timers.delay = ms;
@@ -335,28 +335,28 @@ void Delay_ms(uint32_t ms) {
 }
 
 static void Vac_Start(void) {
-    /* ß≥ßﬂß—ßÈß—ß›ß— ß„ß‰ß—ß‚ß‰ ßﬁß‡ß‰ß‡ß‚ß— */
+    /* –°–Ω–∞—á–∞–ª–∞ —Å—Ç–∞—Ä—Ç –º–æ—Ç–æ—Ä–∞ */
     motorPWM = MOTOR_PWM_MIN;
     TIM2->CH4CVR = motorPWM;
     TIM_CtrlPWMOutputs(TIM2, ENABLE);
-    /* ßŸß—ß’ß÷ß‚ßÿß‹ß— */
+    /* –∑–∞–¥–µ—Ä–∂–∫–∞ */
     Delay_ms(200U);
-    /* ß·ß‡ß‰ß‡ßﬁ ß‡ß‰ß‹ß‚ßÌß”ß—ß÷ßﬁ ß‹ß›ß—ß·ß—ßﬂ #1 */
+    /* –ø–æ—Ç–æ–º –æ—Ç–∫—Ä—ã–≤–∞–µ–º –∫–ª–∞–ø–∞–Ω #1 */
     GPIO_SetBits(PIN_VAL1);
 }
 
 static void Vac_Stop(void) {
-    /* ß©ß—ß‹ß‚ßÌß”ß—ß÷ßﬁ ß‹ß›ß—ß·ß—ßﬂ #1 */
+    /* –ó–∞–∫—Ä—ã–≤–∞–µ–º –∫–ª–∞–ø–∞–Ω #1 */
     GPIO_ResetBits(PIN_VAL1);
     Delay_ms(200U);
-    /* ß±ß‡ß‰ß‡ßﬁ ß”ßÌß‹ß›. ßﬁß‡ß‰ß‡ß‚ */
+    /* –ü–æ—Ç–æ–º –≤—ã–∫–ª. –º–æ—Ç–æ—Ä */
     motorPWM = 0U;
     TIM2->CH4CVR = 0U;
     TIM_CtrlPWMOutputs(TIM2, DISABLE);
 }
 
 static void Vac_Release(void) {
-    /* ß∞ß‰ß‹ß‚ßÌß”ß—ß÷ßﬁ ß‹ß›ß—ß·ß—ßﬂ #2 ßﬂß— 1 ß„ */
+    /* –û—Ç–∫—Ä—ã–≤–∞–µ–º –∫–ª–∞–ø–∞–Ω #2 –Ω–∞ 1 —Å */
     GPIO_SetBits(PIN_VAL2);
     Delay_ms(1000U);
     GPIO_ResetBits(PIN_VAL2);
@@ -393,18 +393,18 @@ static int8_t Clamp8(int16_t v) {
 
 
 static void Task500(void) {
-    // ß„ßÈß⁄ß‰ß—ß÷ßﬁ ß·ß‚ß‡ß⁄ßŸß”ß‡ß’ßﬂßÂß ß’ß—ß”ß›ß÷ßﬂß⁄ßÒ dP/dt, ß‡ßﬂß— ßﬂßÂßÿßﬂß— ß” ß‚ß÷ßÿß⁄ßﬁß÷ PUMP!
+    // —Å—á–∏—Ç–∞–µ–º –ø—Ä–æ–∏–∑–≤–æ–¥–Ω—É—é –¥–∞–≤–ª–µ–Ω–∏—è dP/dt, –æ–Ω–∞ –Ω—É–∂–Ω–∞ –≤ —Ä–µ–∂–∏–º–µ PUMP!
     static uint32_t p_prev = 0;
     static int first = 1;
 
     if (first) {
         p_prev = p_sensor_Filtered;
         first = 0;
-        p_derivative = INT16_MAX;  // ß‡ß„ß‰ß—ß”ß›ßÒß÷ßﬁ ß‰ß”ß‡ß◊ ßŸß—ßÎß⁄ß‰ßﬂß‡ß÷ ßŸßﬂß—ßÈß÷ßﬂß⁄ß÷
+        p_derivative = INT16_MAX;  // –æ—Å—Ç–∞–≤–ª—è–µ–º —Ç–≤–æ—ë –∑–∞—â–∏—Ç–Ω–æ–µ –∑–Ω–∞—á–µ–Ω–∏–µ
     } 
     else {
         int32_t diff = (int32_t)p_prev - (int32_t)p_sensor_Filtered;
-        // ß∞ß‘ß‚ß—ßﬂß⁄ßÈß⁄ß”ß—ß÷ßﬁ, ßÈß‰ß‡ß“ßÌ ßﬂß÷ ß“ßÌß›ß‡ ß·ß÷ß‚ß÷ß·ß‡ß›ßﬂß÷ßﬂß⁄ßÒ ß·ß‚ß⁄ ß·ß‚ß⁄ß„ß”ß—ß⁄ß”ß—ßﬂß⁄ß⁄ ß” int16_t
+        // –û–≥—Ä–∞–Ω–∏—á–∏–≤–∞–µ–º, —á—Ç–æ–±—ã –Ω–µ –±—ã–ª–æ –ø–µ—Ä–µ–ø–æ–ª–Ω–µ–Ω–∏—è –ø—Ä–∏ –ø—Ä–∏—Å–≤–∞–∏–≤–∞–Ω–∏–∏ –≤ int16_t
         if (diff > INT16_MAX) diff = INT16_MAX;
         if (diff < INT16_MIN) diff = INT16_MIN;
         p_derivative = (int16_t)diff;
@@ -414,48 +414,48 @@ static void Task500(void) {
 
 
 /* -----------------------------------------------------------------------------
- * ß∂ßÂßﬂß‹ßËß⁄ßÒ ß·ß÷ß‚ß÷ßÁß‡ß’ß— ß” ß‚ß÷ßÿß⁄ßﬁ ß„ßﬂß— 
+ * –§—É–Ω–∫—Ü–∏—è –ø–µ—Ä–µ—Ö–æ–¥–∞ –≤ —Ä–µ–∂–∏–º —Å–Ω–∞ 
  * ---------------------------------------------------------------------------*/
 void Standby(void) {
 
-    Flash_Save(FL_ST_SLEEP, maxVacCalibValue);   /* ß·ß‡ßﬁß÷ßÈß—ß÷ßﬁ ?ß„ß·ß⁄ßﬁ? ß’ß‡ ß‡ß‰ß‹ß›ßßÈß÷ßﬂß⁄ßÒ ß”ß„ß÷ß‘ß‡ */
+    Flash_Save(FL_ST_SLEEP, maxVacCalibValue);   /* –ø–æ–º–µ—á–∞–µ–º ?—Å–ø–∏–º? –¥–æ –æ—Ç–∫–ª—é—á–µ–Ω–∏—è –≤—Å–µ–≥–æ */
 
     Button_Disable();
-    // ß∞ß„ß‰ß—ßﬂß—ß”ß›ß⁄ß”ß—ß÷ßﬁ SysTick, ßÈß‰ß‡ß“ßÌ ß·ß‡ß‘ß—ß„ß⁄ß‰ßÓ ß’ß⁄ß„ß·ß›ß÷ß€
+    // –û—Å—Ç–∞–Ω–∞–≤–ª–∏–≤–∞–µ–º SysTick, —á—Ç–æ–±—ã –ø–æ–≥–∞—Å–∏—Ç—å –¥–∏—Å–ø–ª–µ–π
     NVIC_DisableIRQ(SysTick_IRQn);
     SysTick->CTLR &= ~STK_CTLR_STE;
-    // ß£ßÌß‹ß› ß·ß⁄ß‰ß—ßﬂß⁄ß÷ ß⁄ ß„ß÷ßﬂß„ß‡ß‚
+    // –í—ã–∫–ª –ø–∏—Ç–∞–Ω–∏–µ –∏ —Å–µ–Ω—Å–æ—Ä
     GPIO_ResetBits(PIN_EN);
-    // ß£ßÌß‹ß› ß’ß⁄ß„ß·ß›ß÷ß€
+    // –í—ã–∫–ª –¥–∏—Å–ø–ª–µ–π
     GPIO_ResetBits(PIN_DISP_0);
     GPIO_ResetBits(PIN_DISP_1);
 
-    // ß£ßÌß‹ß› ß∞ßµ
+    // –í—ã–∫–ª –û–£
     OPA_Cmd(DISABLE);
     
-    // ß£ßÌß‹ß› ß°ß∏ß±
+    // –í—ã–∫–ª –ê–¶–ü
     ADC_Cmd(ADC1, DISABLE);
 
-    // ß¨ß‡ßﬂßÊß⁄ß‘ ß„ß‡ß“ßÌß‰ß⁄ßÒ ß’ß›ßÒ ß·ß‚ß‡ß“ßÂßÿß’ß÷ßﬂß⁄ßÒ
+    // –ö–æ–Ω—Ñ–∏–≥ —Å–æ–±—ã—Ç–∏—è –¥–ª—è –ø—Ä–æ–±—É–∂–¥–µ–Ω–∏—è
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     EXTI_InitTypeDef EXTI_InitStructure = {0};
-    EXTI_InitStructure.EXTI_Line = EXTI_Line0;  // ß¨ßﬂß‡ß·ß‹ß— ßﬂß— PD0
+    EXTI_InitStructure.EXTI_Line = EXTI_Line0;  // –ö–Ω–æ–ø–∫–∞ –Ω–∞ PD0
     EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Event;
     EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;
     EXTI_InitStructure.EXTI_LineCmd = ENABLE;
     EXTI_Init(&EXTI_InitStructure);
-    // ß¨ß‡ßﬂßÊß⁄ß‘ßÂß‚ß⁄ß‚ßÂß÷ßﬁ ßﬂß— GPIOD
+    // –ö–æ–Ω—Ñ–∏–≥—É—Ä–∏—Ä—É–µ–º –Ω–∞ GPIOD
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource0);
 
-    // ßﬂß— ß”ß„ßÒß‹ß⁄ß€ ß‡ßÈß⁄ßÎß—ß÷ßﬁ ß„ß‰ß—ß‚ß‡ß÷ ß„ß‡ß“ßÌß‰ß⁄ß÷
+    // –Ω–∞ –≤—Å—è–∫–∏–π –æ—á–∏—â–∞–µ–º —Å—Ç–∞—Ä–æ–µ —Å–æ–±—ã—Ç–∏–µ
     EXTI_ClearITPendingBit(EXTI_Line0);
-    // ßµß„ßÌß·ß›ßÒß÷ßﬁ
+    // –£—Å—ã–ø–ª—è–µ–º
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
 
 #ifdef ENABLE_DEBUG_IN_LOWPOWER_MODE
 #define PFIC_SCTLR_DEEPSLEEP    ((uint32_t)4)
 /*!< Low-power mode of the control system. 1: DEEPSLEEP 0: SLEEP */
-    /* ß£ßÁß‡ß’ ß” Sleep mode ß”ßﬁß÷ß„ß‰ß‡ Standby, ßÈß‰ß‡ß“ßÌ ß‡ß„ß‰ß—ß›ß„ßÒ ß‚ß—ß“ß‡ß‰ß—ß‰ßÓ ß‡ß‰ß›ß—ß’ßÈß⁄ß‹ */
+    /* –í—Ö–æ–¥ –≤ Sleep mode –≤–º–µ—Å—Ç–æ Standby, —á—Ç–æ–±—ã –æ—Å—Ç–∞–ª—Å—è —Ä–∞–±–æ—Ç–∞—Ç—å –æ—Ç–ª–∞–¥—á–∏–∫ */
     PWR->CTLR = 0;
     NVIC->SCTLR &= ~PFIC_SCTLR_DEEPSLEEP;
     __WFE();
@@ -463,7 +463,7 @@ void Standby(void) {
     PWR_EnterSTANDBYMode(PWR_STANDBYEntry_WFE);
 #endif
 
-    /* ß±ß‡ß„ß›ß÷ ß·ß‚ß‡ß“ßÂßÿß’ß÷ßﬂß⁄ßÒ: */
+    /* –ü–æ—Å–ª–µ –ø—Ä–æ–±—É–∂–¥–µ–Ω–∏—è: */
     Init_SysTick();
     opMode = MODE_WAKEUP;
 
@@ -473,7 +473,7 @@ void Standby(void) {
 static void SaveState(void) {
     switch (opMode) {
         case MODE_WAKEUP:
-            break;       /* ß„ß‡ßﬂ ß÷ßÎß◊ ßﬂß÷ ß·ß‡ß’ß‰ß”ß÷ß‚ßÿß’ß◊ßﬂ °™ ßﬂß÷ ß·ß⁄ßÍß÷ßﬁ */
+            break;       /* —Å–æ–Ω –µ—â—ë –Ω–µ –ø–æ–¥—Ç–≤–µ—Ä–∂–¥—ë–Ω ‚Äî –Ω–µ –ø–∏—à–µ–º */
 
         case MODE_TRACK: /* Fall through */
         case MODE_HOLD:  
@@ -482,6 +482,6 @@ static void SaveState(void) {
 
         default:
             Flash_Save(FL_ST_IDLE,  maxVacCalibValue);
-            break;      /* PUMP ß⁄ ß·ß‚ß‡ßÈß÷ß÷ °˙ IDLE */
+            break;      /* PUMP –∏ –ø—Ä–æ—á–µ–µ ‚Üí IDLE */
     }
 }

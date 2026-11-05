@@ -2,12 +2,12 @@
 #include "ch32v00x_conf.h"
 #include "button.h"
 
-#define DEBOUNCE_TICK_COUNT      10U       /* �ާ� ���էѧӧݧ֧ߧڧ� �է�֧ҧ֧٧ԧ� */
-#define DOUBLE_CLICK_TIMEOUT_MS  300U      /* ��ܧߧ� �ާ֧اէ� �ܧݧڧܧѧާ� */
-#define HOLD_TIME_MS             1000U     /* ������ �էݧڧ�֧ݧ�ߧ�ԧ� �ߧѧاѧ�ڧ� */
+#define DEBOUNCE_TICK_COUNT      10U       /* мс подавления дребезга */
+#define DOUBLE_CLICK_TIMEOUT_MS  300U      /* окно между кликами */
+#define HOLD_TIME_MS             1000U     /* порог длительного нажатия */
 
-/* �����ҧѧ� �٧ѧէ֧�اܧ� ~1 �ާ�, �ߧ� �٧ѧӧڧ�ڧ� ��� SysTick (�ߧ�اߧ� �էݧ� Button_Enable).
-   �������ڧ�ڧ֧ߧ� 5 �� ���ڧާ֧�ߧ� ��ѧܧ��� �ߧ� �ڧ�֧�ѧ�ڧ� volatile-��ڧܧݧ�. */
+/* Грубая задержка ~1 мс, не зависит от SysTick (нужна для Button_Enable).
+   Коэффициент 5 — примерно тактов на итерацию volatile-цикла. */
 extern uint32_t SystemCoreClock;
 static void BusyDelayMs(uint32_t ms) {
     while (ms--) {
@@ -16,15 +16,15 @@ static void BusyDelayMs(uint32_t ms) {
 }
 
 /* -----------------------------------------------------------------------------
- * ���ѧ�ڧߧ� �������ߧڧ�
+ * Машина состояний
  * ---------------------------------------------------------------------------*/
 typedef enum {
-    SM_WAIT_PRESS,        /* �اէק� �ߧѧاѧ�ڧ� */
-    SM_DEBOUNCE_PRESS,    /* �է�֧ҧ֧٧� ���� �ߧѧاѧ�ڧ� */
-    SM_WAIT_RELEASE,      /* �اէק� ������ܧѧߧڧ� �ڧݧ� �ڧ��֧�֧ߧڧ� HOLD_TIME */
-    SM_HOLD_DETECTED,     /* HOLD �٧ѧ�ڧܧ�ڧ��ӧѧ�, �اէק� ������ܧѧߧڧ� */
-    SM_DEBOUNCE_RELEASE,  /* �է�֧ҧ֧٧� ���� ������ܧѧߧڧ� */
-    SM_WAIT_SECOND_PRESS  /* ��ܧߧ� ��اڧէѧߧڧ� �ӧ����ԧ� �ܧݧڧܧ� */
+    SM_WAIT_PRESS,        /* ждём нажатия */
+    SM_DEBOUNCE_PRESS,    /* дребезг при нажатии */
+    SM_WAIT_RELEASE,      /* ждём отпускания или истечения HOLD_TIME */
+    SM_HOLD_DETECTED,     /* HOLD зафиксирован, ждём отпускания */
+    SM_DEBOUNCE_RELEASE,  /* дребезг при отпускании */
+    SM_WAIT_SECOND_PRESS  /* окно ожидания второго клика */
 } ButtonState;
 
 static volatile uint8_t btnEnabled = 0;
@@ -33,8 +33,8 @@ static ButtonState btnState = SM_WAIT_PRESS;
 static uint32_t    debounceCounter  = 0;
 static uint32_t    doubleClickTimer = 0;
 static uint32_t    holdTimer        = 0;
-static uint8_t     holdOccurred     = 0;  /* ����ݧ� HOLD CLICK �ߧ� �ԧ֧ߧ֧�ڧ��֧� */
-static uint8_t     dblCandidate     = 0;  /* ���� �ߧѧاѧ�ڧ� �� �ܧѧߧէڧէѧ� �� DOUBLE */
+static uint8_t     holdOccurred     = 0;  /* после HOLD CLICK не генерируем */
+static uint8_t     dblCandidate     = 0;  /* это нажатие — кандидат в DOUBLE */
 
 static bool Button_IsPressed(void) {
     return !GPIO_ReadInputDataBit(PIN_BTN);
@@ -70,7 +70,7 @@ void Button_OnTick(void) {
             } else if (holdTimer > 0U) {
                 holdTimer--;
             } else {
-                /* ��է֧�اѧߧڧ� ���֧ӧ���ڧݧ� HOLD_TIME �� ���� HOLD */
+                /* удержание превысило HOLD_TIME — это HOLD */
                 btnEvt = BTN_EVT_HOLD;
                 holdOccurred = 1U;
                 dblCandidate = 0U;
@@ -87,24 +87,24 @@ void Button_OnTick(void) {
 
         case SM_DEBOUNCE_RELEASE:
             if (pressed) {
-                /* �ܧ����ܧ�� ���ӧ���ߧ�� �ߧѧاѧ�ڧ� �� �ܧѧߧէڧէѧ� �� �էӧ�ۧߧ�� �ܧݧڧ� */
+                /* короткое повторное нажатие — кандидат в двойной клик */
                 dblCandidate = (doubleClickTimer > 0U) ? 1U : 0U;
                 btnState = SM_DEBOUNCE_PRESS;
                 debounceCounter = DEBOUNCE_TICK_COUNT;
             } else if (debounceCounter > 0U) {
                 debounceCounter--;
             } else if (holdOccurred) {
-                /* ����ݧ� HOLD �ݧڧ�� �է�اէѧ���� ������ܧѧߧڧ� �� �اէѧ�� �ߧ�ӧ�ԧ� �ߧѧاѧ�ڧ� */
+                /* после HOLD лишь дождаться отпускания и ждать нового нажатия */
                 holdOccurred = 0U;
                 btnState = SM_WAIT_PRESS;
             } else if (dblCandidate) {
-                /* �ӧ����� �ܧݧڧ� ���ڧ�ק� �� ��ܧߧ� �� DOUBLE */
+                /* второй клик пришёл в окно — DOUBLE */
                 btnEvt = BTN_EVT_DOUBLE;
                 doubleClickTimer = 0U;
                 dblCandidate = 0U;
                 btnState = SM_WAIT_PRESS;
             } else {
-                /* �����ۧ�ڧӧ�� ������ܧѧߧڧ� �� CLICK, ��ܧߧ� �ߧ� �էӧ�ۧߧ�� �ܧݧڧ� ���ܧ����� */
+                /* устойчивое отпускание — CLICK, окно на двойной клик открыто */
                 btnEvt = BTN_EVT_CLICK;
                 doubleClickTimer = DOUBLE_CLICK_TIMEOUT_MS;
                 btnState = SM_WAIT_SECOND_PRESS;
@@ -118,13 +118,13 @@ void Button_OnTick(void) {
                     btnState = SM_DEBOUNCE_PRESS;
                     debounceCounter = DEBOUNCE_TICK_COUNT;
                 } else {
-                    /* ��ܧߧ� �ڧ��֧ܧݧ� �� ���� ��ا� ��ҧ���ߧ�� �ߧ�ӧ�� �ߧѧاѧ�ڧ� */
+                    /* окно истекло — это уже обычное новое нажатие */
                     btnState = SM_WAIT_PRESS;
                 }
             } else if (doubleClickTimer > 0U) {
                 doubleClickTimer--;
             } else {
-                /* CLICK �ߧ� ���ڧ�ѧ֧� �� �֧ԧ� �է�ݧا֧� �٧ѧҧ�ѧ�� ���ߧ�ӧߧ�� ��ڧܧ� */
+                /* CLICK не стираем — его должен забрать основной цикл */
                 btnState = SM_WAIT_PRESS;
             }
             break;
@@ -134,7 +134,7 @@ void Button_OnTick(void) {
 void Button_Enable(void) {
     btnEnabled = 0U;
 
-    /* ��ҧ��� �ާѧ�ڧߧ� �� ���ҧ���ڧ� */
+    /* сброс машины и событий */
     btnEvt = BTN_EVT_NONE;
     btnState = SM_WAIT_PRESS;
     debounceCounter = 0U;
@@ -143,8 +143,8 @@ void Button_Enable(void) {
     holdOccurred = 0U;
     dblCandidate = 0U;
 
-    /* �اէק�, ���ܧ� �ܧߧ��ܧ� �����ۧ�ڧӧ� ������֧ߧ�: DEBOUNCE_TICK_COUNT �ާ� ���է���.
-       ������� �ߧѧ���ާ�� ��֧�֧� GPIO, BusyDelay �ߧ� �٧ѧӧڧ�ڧ� ��� SysTick. */
+    /* ждём, пока кнопка устойчиво отпущена: DEBOUNCE_TICK_COUNT мс подряд.
+       Опрос напрямую через GPIO, BusyDelay не зависит от SysTick. */
     uint32_t stable = 0U;
     while (stable < DEBOUNCE_TICK_COUNT) {
         if (Button_IsPressed()) {
